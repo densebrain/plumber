@@ -1,10 +1,12 @@
 package org.plumber.manager.services
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import org.plumber.client.domain.Execution
 import org.plumber.common.domain.Worker
+import org.plumber.common.services.FileService
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.data.domain.PageRequest
-import org.springframework.data.domain.Sort
 
 import javax.annotation.PostConstruct
 
@@ -14,11 +16,9 @@ import groovy.util.logging.Slf4j
 import org.plumber.client.domain.Job
 import org.plumber.client.domain.State
 import org.plumber.common.services.JobService
-import org.plumber.manager.repo.JobRepository
+
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
-
-import javax.annotation.Resource
 
 /**
  * Created by jglanz on 11/19/14.
@@ -28,12 +28,14 @@ import javax.annotation.Resource
 @Slf4j
 class JobManagerService {
 
-
 	@Autowired
 	private JobService jobService
 
-	@Resource
-	private JobRepository jobRepository
+	@Autowired
+	private FileService files
+
+	@Autowired
+	private ObjectMapper objectMapper
 
 	@Value('${local.server.port:0}')
 	private int localPort
@@ -41,30 +43,61 @@ class JobManagerService {
 	@Value('${server.port:0}')
 	private int serverPort
 
+	private File pendingJobsFile
+
+
+	private final LinkedList<JobHolder> pendingJobs = new LinkedList<>()
+
 	@PostConstruct
 	void setup() {
 		if (localPort > 0)
 			serverPort = localPort
 
+		pendingJobsFile = new File(files.cacheDir, 'jobs.pending.json')
+		if (pendingJobsFile.exists()) {
+			log.info("Loading persisted incomplete jobs")
+
+			String jobsJson = pendingJobsFile.text
+			List<JobHolder> persistedJobs = new Gson().fromJson(jobsJson, new TypeToken<List<JobHolder>>() {}.getType());
+
+			pendingJobs.addAll(persistedJobs)
+		}
+
 		log.info("Started Manager on ${serverPort}")
 	}
 
-	private final LinkedList<JobHolder> pendingJobs = new LinkedList<>()
+	void persist() {
+		synchronized (pendingJobs) {
+			String jobsJson = new Gson().toJson(pendingJobs)
+			log.debug("Writing ${jobsJson}")
+			pendingJobsFile.text = jobsJson
 
-	List<Job> getAll() {
-		return jobRepository.findAll(new PageRequest(0,250,Sort.Direction.DESC, 'modifiedAt')).content
+		}
+	}
+
+	File getJobFile(String id) {
+		return new File(files.cacheDir, "jobs/${id}.json")
+	}
+
+	void persist(Job job) {
+		File jobFile = getJobFile(job.id)
+		jobFile.text = new Gson().toJson(job)
 	}
 
 	Job get(String id) {
-		Job job = jobRepository.findOne(id)
+		File jobFile = getJobFile(id)
+		Job job = new Gson().fromJson(jobFile.text)
 		return job
 	}
 
 	Job add(Job job) {
-		job = jobRepository.save(job)
-
 		synchronized (pendingJobs) {
+			if (!job.id)
+				job.id = UUID.randomUUID().toString()
+
 			pendingJobs.addLast(new JobHolder(job: job, state: READY))
+			persist(job)
+			persist()
 		}
 
 		return job
@@ -79,7 +112,8 @@ class JobManagerService {
 					holder.changedAt = System.currentTimeMillis()
 					holder.job.state = EXECUTING
 
-					jobRepository.save(holder.job)
+					persist(holder.job)
+					persist()
 
 					return holder.job
 				}
@@ -102,8 +136,7 @@ class JobManagerService {
 			}
 		}
 
-		//Update job in repo
-		jobRepository.save(job)
+		persist(job)
 
 		synchronized (pendingJobs) {
 			JobHolder existing = null
@@ -117,9 +150,10 @@ class JobManagerService {
 			if (existing) {
 				existing.job = job
 
-				if (job.state.ordinal() >=  COMPLETE.ordinal())
+				if (job.state.ordinal() >=  COMPLETE.ordinal()) {
 					pendingJobs.remove(job)
-				else
+					persist()
+				} else
 					existing.state = job.state
 
 			}

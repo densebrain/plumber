@@ -1,54 +1,94 @@
-
 buildscript {
-    repositories {
+	repositories {
 		mavenLocal()
 		mavenCentral()
 		maven { url "http://repo.spring.io/snapshot" }
-        maven { url "http://repo.spring.io/milestone" }
-        maven { url "http://repo.spring.io/libs-release" }
-        maven { url 'http://repos.zeroturnaround.com/nexus/content/groups/zt-public/' }
-        
+		maven { url "http://repo.spring.io/milestone" }
+		maven { url "http://repo.spring.io/libs-release" }
+		maven { url 'http://repos.zeroturnaround.com/nexus/content/groups/zt-public/' }
 
-    }
 
-    dependencies {
-        classpath group: 'org.zeroturnaround', name: 'gradle-jrebel-plugin', version: '1.1.2'
-        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.2.0.RC2")
-    }
+	}
+
+	dependencies {
+		classpath group: 'org.zeroturnaround', name: 'gradle-jrebel-plugin', version: '1.1.2'
+		classpath("org.springframework.boot:spring-boot-gradle-plugin:1.2.0.RC2")
+	}
+
+
 }
 
-//Setup the repos for all projects
+/**
+ * Set all versions for compilation
+ */
+ext {
+	groovyVersion = '2.3.7'
+	hibernateVersion = '4.3.7.Final'
+	hibernateValidatorVersion = '5.1.3.Final'
+	springVersion = '4.1.2.RELEASE'
+	springSecurityVersion = '3.2.4.RELEASE'
+	jerseyVersion = '2.13'
+	jacksonVersion = '2.4.4'
+	slf4jVersion = '1.6.4'
+}
+
+/**
+ * Configure global repos and tasks
+ *
+ * Apply java/rebel, set version, etc
+ */
 allprojects {
-    repositories {
-        mavenLocal()
-        mavenCentral()
-        maven { url "http://repo.spring.io/milestone" }
-        maven { url "http://repo.spring.io/snapshot" }
-        maven { url "http://repo.spring.io/libs-release" }
-    }
+	repositories {
+		mavenLocal()
+		mavenCentral()
+		maven { url "http://repo.spring.io/milestone" }
+		maven { url "http://repo.spring.io/snapshot" }
+		maven { url "http://repo.spring.io/libs-release" }
+	}
 
 
-    apply plugin: 'java'
+	apply plugin: 'groovy'
+	apply plugin: 'java'
+	apply plugin: 'rebel'
 
-    sourceCompatibility = 1.8
-    targetCompatibility = 1.8
-    version = '1.0'
+	group = 'com.rads'
+	version = '1.0'
 
-    buildDir = new File(projectDir, 'target')
-    buildDir.mkdirs()
+	sourceCompatibility = 1.8
+	targetCompatibility = 1.8
+
+
+	buildDir = new File(projectDir, 'target')
+	buildDir.mkdirs()
+
+	dependencies {
+		compile "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+		compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:${jacksonVersion}"
+
+		compile "org.codehaus.groovy:groovy-all:${groovyVersion}"
+
+		testCompile group: 'junit', name: 'junit', version: '4.11'
+	}
+
+	sourceSets {
+		main {
+			groovy {
+				// override the default locations, rather than adding additional ones
+				srcDirs = ['src/main/groovy', 'src/main/java']
+			}
+			java {
+				srcDirs = [] // don't compile Java code twice
+			}
+		}
+	}
+
 }
 
-//Setup the actual artifact creation projects
 subprojects {
 
-    apply plugin: 'groovy'
-    apply plugin: 'rebel'
-
-
-    generateRebel.mustRunAfter(classes)
-
-
+	generateRebel.mustRunAfter(classes)
 }
+
 
 configure(subprojects.findAll {it.name != 'client' && it.name != 'common'}) {
     apply plugin: 'spring-boot'
@@ -68,31 +108,24 @@ configure(subprojects.findAll {it.name != 'client' && it.name != 'common'}) {
     }
 }
 
-project(':plumber:client') {
+project(':client') {
 
     dependencies {
         compile "org.glassfish.jersey.media:jersey-media-moxy:${jerseyVersion}"
         compile "org.glassfish.jersey.media:jersey-media-json-jackson:${jerseyVersion}"
+	    compile "org.glassfish.jersey.core:jersey-client:${jerseyVersion}"
+	    compile group: 'com.google.code.gson', name: 'gson', version:'2.2.4'
     }
 }
 
-project(':plumber:pipes') {
+project(':common') {
 
     dependencies {
-        compile project(':plumber:client')
+        compile project(':client')
 
         compile group: 'org.slf4j', name: 'slf4j-api', version: slf4jVersion
-
-        compile "org.reflections:reflections:0.9.9-RC1"
-        compile 'com.amazonaws:aws-java-sdk:1.9.6'
-
-        compile 'org.codehaus.groovy.modules.http-builder:http-builder:0.7.2'
-        compile ("org.glassfish.jersey.containers:jersey-container-servlet:${jerseyVersion}") {
-            exclude group: 'javax.validation'
-        }
-
-        compile 'javax.servlet:javax.servlet-api:3.1.0'
-
+		compile 'commons-lang:commons-lang:2.2'
+	    compile "org.reflections:reflections:0.9.9-RC1"
         compile group: 'org.springframework', name: 'spring-webmvc', version:springVersion
 
         testCompile group: 'junit', name: 'junit', version: '4.11'
@@ -102,10 +135,11 @@ project(':plumber:pipes') {
 }
 
 //Setup the final artifact projects
-project(':plumber:worker') {
+project(':worker') {
+	apply plugin: 'war'
 
     dependencies {
-        compile project(':plumber:pipes')
+        compile project(':common')
         compile "org.springframework.boot:spring-boot-starter"
         compile "org.springframework.boot:spring-boot-starter-tomcat"
         compile "org.springframework.boot:spring-boot-starter-web"
@@ -124,8 +158,13 @@ project(':plumber:worker') {
     }
 }
 
-project(':plumber:manager') {
-    dependencies {
-        compile project(':plumber:worker')
+project(':manager') {
+	apply plugin: 'war'
+
+	dependencies {
+        compile project(':worker')
+
+
+
     }
 }

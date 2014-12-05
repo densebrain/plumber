@@ -20,7 +20,7 @@ class FileService implements Constants {
 	@Value('${file.storage.path:/tmp}')
 	String fileStoragePath
 
-	File dir, cacheDir
+	File dir, cacheDir, baseDirectory
 
 	List<File> tempFiles = []
 
@@ -28,6 +28,8 @@ class FileService implements Constants {
 	void setup() {
 		dir = new File(fileStoragePath)
 		dir.mkdirs()
+
+		baseDirectory = new File('.')
 
 		cacheDir = new File(CACHE)
 		cacheDir.mkdirs()

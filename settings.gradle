@@ -2,7 +2,8 @@ rootProject.name = 'plumber'
 
 include 'manager'
 include 'worker'
-include 'pipes'
-
+include 'common'
 include 'client'
+
+include 'test'
 
