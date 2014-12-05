@@ -1,0 +1,8 @@
+rootProject.name = 'plumber'
+
+include 'manager'
+include 'worker'
+include 'pipes'
+
+include 'client'
+

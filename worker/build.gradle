@@ -1,0 +1,7 @@
+
+apply plugin: 'war'
+
+
+bootRun.doFirst {
+    def args = ["-Dserver.port=10000"]
+}

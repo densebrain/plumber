@@ -1,0 +1,17 @@
+
+
+
+apply plugin: 'war'
+
+
+
+bootRun.doFirst {
+    def args = ["-Dserver.port=9999"]
+}
+
+
+
+dependencies {
+    compile 'org.springframework.data:spring-data-jpa'
+    compile 'org.springframework.data:spring-data-mongodb'
+}
