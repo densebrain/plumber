@@ -1,9 +1,12 @@
 package org.plumber.common.services
 
 import groovy.util.logging.Slf4j
+import org.plumber.common.domain.ContextHolder
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory
 import org.springframework.context.ApplicationContext
+import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.stereotype.Service
 
 import java.lang.reflect.Modifier
@@ -15,8 +18,12 @@ import java.lang.reflect.Modifier
 @Service
 @Slf4j
 class BeanService {
+
 	@Autowired
 	ApplicationContext context;
+
+	@Autowired()
+	ContextHolder contextHolder
 
 	Object get(Class<?> clazz) {
 		if (Modifier.isAbstract(clazz.getModifiers()))
@@ -27,16 +34,26 @@ class BeanService {
 			o = context.getBean(clazz);
 		} catch (Exception e) {
 			try {
-				o = context.autowireCapableBeanFactory.autowire(clazz, AutowireCapableBeanFactory.AUTOWIRE_BY_TYPE, true)
-			} catch (Exception e2) {
+				for (AnnotationConfigApplicationContext subContext : contextHolder.contexts) {
+					try {
+						o = subContext.getBean(clazz)
+						if (o != null)
+							return o
+					} catch (Exception e2) {}
+				}
+			} catch (Exception e4) {
 				try {
-					o = clazz.newInstance()
-				} catch (Exception e3) {
-					log.debug("Unavailable in spring context or classloader: ${e3.message}");
-//					log.debug("Failed to initialize [spring]", e2);
-//					log.debug("Failed to initialize ", e3);
+					o = context.autowireCapableBeanFactory.autowire(clazz, AutowireCapableBeanFactory.AUTOWIRE_BY_TYPE, true)
+				} catch (Exception e2) {
+					try {
+						o = clazz.newInstance()
+					} catch (Exception e3) {
+						log.debug("Unavailable in spring context or classloader: ${e3.message}");
+					}
 				}
 			}
+
+
 		}
 
 		return o

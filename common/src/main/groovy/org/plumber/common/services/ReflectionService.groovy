@@ -25,10 +25,14 @@ class ReflectionService {
 
 	@PostConstruct
 	private void setup() {
+		Thread.currentThread().setContextClassLoader(plumberClassLoader)
+
 		HashSet<URL> urls = new HashSet<>(ClasspathHelper.forJavaClassPath())
-		urls.addAll(ClasspathHelper.forClassLoader(plumberClassLoader))
+		urls.addAll(plumberClassLoader.URLs)
+
 
 		reflections = new Reflections(urls)
+
 	}
 
 	public <T> Set<Class<? extends T>> getSubTypesOf(final Class<T> type) {

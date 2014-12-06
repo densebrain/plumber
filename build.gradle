@@ -14,13 +14,12 @@ buildscript {
 		classpath group: 'org.zeroturnaround', name: 'gradle-jrebel-plugin', version: '1.1.2'
 		classpath("org.springframework.boot:spring-boot-gradle-plugin:1.2.0.RC2")
 	}
-
-
 }
 
 /**
  * Set all versions for compilation
  */
+
 ext {
 	groovyVersion = '2.3.7'
 	hibernateVersion = '4.3.7.Final'
@@ -46,12 +45,11 @@ allprojects {
 		maven { url "http://repo.spring.io/libs-release" }
 	}
 
-
 	apply plugin: 'groovy'
 	apply plugin: 'java'
 	apply plugin: 'rebel'
 
-	group = 'com.rads'
+	group = 'org.plumber'
 	version = '1.0'
 
 	sourceCompatibility = 1.8
@@ -85,7 +83,6 @@ allprojects {
 }
 
 subprojects {
-
 	generateRebel.mustRunAfter(classes)
 }
 
@@ -163,8 +160,12 @@ project(':manager') {
 
 	dependencies {
         compile project(':worker')
-
-
-
     }
+}
+
+
+project(':test') {
+	dependencies {
+		compile project(':common')
+	}
 }

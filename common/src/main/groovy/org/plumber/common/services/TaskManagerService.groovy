@@ -28,7 +28,7 @@ class TaskManagerService {
 	private ReflectionService reflectionService
 
 	@Autowired
-	BeanService beanService
+	private BeanService beanService
 
 
 	@PostConstruct
