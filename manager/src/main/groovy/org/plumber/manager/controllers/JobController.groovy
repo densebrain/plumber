@@ -668,7 +668,7 @@ package org.plumber.manager.controllers
 
 import groovy.util.logging.Slf4j
 import org.plumber.client.domain.Job
-import org.plumber.common.services.JobService
+import org.plumber.core.services.JobService
 import org.plumber.manager.services.JobManagerService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component

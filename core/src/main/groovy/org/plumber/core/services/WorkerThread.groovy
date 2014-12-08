@@ -668,7 +668,6 @@ package org.plumber.core.services
 
 import groovy.util.logging.Slf4j
 import org.plumber.client.domain.Job
-import org.plumber.common.services.JobService
 import org.plumber.common.util.ManagedThread
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.config.ConfigurableBeanFactory

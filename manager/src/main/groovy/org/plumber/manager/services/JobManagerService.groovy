@@ -681,7 +681,7 @@ import static org.plumber.client.domain.State.*
 import groovy.util.logging.Slf4j
 import org.plumber.client.domain.Job
 import org.plumber.client.domain.State
-import org.plumber.common.services.JobService
+import org.plumber.core.services.JobService
 
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service

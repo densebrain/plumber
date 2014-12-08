@@ -666,11 +666,14 @@
 
 package org.plumber.core
 
+import org.plumber.core.config.JerseyConfiguration
+import org.plumber.core.config.LoaderConfig
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+import org.springframework.boot.context.embedded.EmbeddedServletContainerFactory
 import org.springframework.boot.context.web.SpringBootServletInitializer
 import org.springframework.boot.test.SpringApplicationConfiguration
 import org.springframework.context.annotation.ComponentScan
@@ -688,9 +691,8 @@ import org.springframework.context.annotation.ComponentScan
 ])
 class Application extends SpringBootServletInitializer {
 
-
     static void main(String[] args) throws Exception {
-        SpringApplication.run(Application.class, args);
+        SpringApplication.run([Application.class, LoaderConfig.class, JerseyConfiguration.class, EmbeddedServletContainerFactory.class] as Object[], args);
     }
 
 }

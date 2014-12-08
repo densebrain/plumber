@@ -664,17 +664,20 @@
 
 
 
-package org.plumber.common.services
+package org.plumber.core.services
 
 import groovy.util.logging.Slf4j
-import org.plumber.client.domain.Task
-import org.plumber.client.domain.TaskType
+import org.plumber.common.domain.ContextHolder
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.config.AutowireCapableBeanFactory
+import org.springframework.context.ApplicationContext
+import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.core.Ordered
 import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Service
 
-import javax.annotation.PostConstruct
+import java.lang.reflect.Modifier
 
 /**
  * Created by jglanz on 11/18/14.
@@ -683,52 +686,47 @@ import javax.annotation.PostConstruct
 @Service
 @Order(Ordered.LOWEST_PRECEDENCE)
 @Slf4j
-class TaskManagerService {
-
-	Map<String, TaskType> taskTypes = [:]
+class BeanService {
 
 	@Autowired
-	PackageManagerService packageManagerService
+	ApplicationContext context;
 
 	@Autowired
-	private ReflectionService reflectionService
+	@Qualifier("PlumbingContext")
+	ContextHolder contextHolder
 
-	@Autowired
-	private BeanService beanService
+	Object get(Class<?> clazz) {
+		if (Modifier.isAbstract(clazz.getModifiers()))
+			return null
 
-
-	@PostConstruct
-	void setup() {
-		Set<Class<? extends TaskType>> clazzes = reflectionService.getSubTypesOf(TaskType.class)
-		log.info("Found task classes ${clazzes}")
-
-		clazzes.each { clazz ->
-			TaskType taskType = beanService.get(clazz);
-
-			if (taskType != null && !taskTypes.containsValue(taskType)) {
-				log.info("Found task type: {}", taskType.name())
-				taskTypes[taskType.name()] = taskType
+		Object o = null
+		try {
+			o = context.getBean(clazz);
+		} catch (Exception e) {
+			try {
+				for (AnnotationConfigApplicationContext subContext : contextHolder.contexts) {
+					try {
+						o = subContext.getBean(clazz)
+						if (o != null)
+							return o
+					} catch (Exception e2) {}
+				}
+			} catch (Exception e4) {
+				try {
+					o = context.autowireCapableBeanFactory.autowire(clazz, AutowireCapableBeanFactory.AUTOWIRE_BY_TYPE, true)
+				} catch (Exception e2) {
+					try {
+						o = clazz.newInstance()
+					} catch (Exception e3) {
+						log.debug("Unavailable in spring context or classloader: ${e3.message}");
+					}
+				}
 			}
 
-		}
-	}
 
-	TaskType getTaskType(String alias) {
-		return taskTypes[alias]
-	}
-
-	List<Task> parseTasks(json) {
-		List<Task> tasks = []
-
-		json?.each { it ->
-			TaskType type = taskTypes[(String) it.type]
-			if (!type)
-				throw new IllegalArgumentException("task.type.unknown.${it.type}")
-
-			tasks += new Task(it)
 		}
 
-		return tasks
+		return o
 	}
 
 }

@@ -664,15 +664,19 @@
 
 
 
-package org.plumber.common.services
+package org.plumber.core.services
 
 import groovy.util.logging.Slf4j
-import org.plumber.client.domain.OsPackage
-import org.plumber.common.services.resources.OsPackageManager
+import org.plumber.client.domain.Execution
+import org.plumber.client.domain.Job
+import org.plumber.client.domain.Requirements
+import org.plumber.client.domain.State
+import org.plumber.client.domain.TaskExecutor
+import org.plumber.client.domain.TaskResult
+import org.plumber.common.services.JobContext
+import org.springframework.beans.factory.ObjectFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
-
-import javax.annotation.PostConstruct
 
 /**
  * Created by jglanz on 11/17/14.
@@ -680,72 +684,83 @@ import javax.annotation.PostConstruct
 
 @Service
 @Slf4j
-class PackageManagerService {
+class JobService {
 
+	@Autowired
+	TaskManagerService taskManagerService
 
-    @Autowired
-    private BeanService beanService
+	@Autowired
+	PackageManagerService packageManagerService
 
-    @Autowired
-    private ReflectionService reflectionService
+	@Autowired
+	ObjectFactory<JobContext> jobContextFactory
 
-    private OsPackageManager manager
+	Job parseJob(Map<?,?> json) {
+		def tasksJson = json.tasks
+		json.tasks = null
 
-    private List<OsPackage> installedPackages = []
+		Job job = new Job(json)
+		job.tasks = taskManagerService.parseTasks(tasksJson)
 
-    @PostConstruct
-    void setup() {
-        List<OsPackageManager> managers = availablePackageManagers()
-        log.info('Resource Managers Available: {}', managers)
+		return job
+	}
 
-        if (!managers) {
-            log.error("No available package managers")
-            return
-        }
+	void ensureRequirements(Job job) {
+		job.tasks.each { task ->
+			Requirements req = taskManagerService.getTaskType(task.type)?.requirements()
+			req?.packages?.each { it ->
+				packageManagerService.ensurePackage(it)
+			}
+		}
+	}
 
-        manager = managers[0]
-        log.info('Using {}', manager.name())
+	Execution execute(JobContext context, Job job) {
+		Execution exec = new Execution()
+		job.executions += exec
+		if (!context)
+			context = jobContextFactory.object
 
-        updateInstalledPackages()
-    }
+		context.execution = exec
 
-    void updateInstalledPackages() {
-        installedPackages = []
+		try {
+			//Make sure the job can be execute on this machine
+			ensureRequirements(job)
 
-        manager.list().each { p ->
-            log.info('Installed package {}-version-{}', p.name, p.version)
-            installedPackages += p
-        }
-    }
+			exec.state = State.EXECUTING
 
-    void ensurePackage(OsPackage p) {
-        log.debug("Ensuring Package: {}", p)
-        if (installedPackages.contains(p))
-            return
+			job.tasks.each { task ->
+				TaskExecutor taskExec = taskManagerService.getTaskType(task.type)?.executor()
+				if (!taskExec) {
+					throw new Exception("Failed to get task executor for type ${task.type}")
 
-        log.info("Installing package: {}", p)
-        manager.install(p.name)
-        updateInstalledPackages()
-    }
+				}
 
-    List<OsPackageManager> availablePackageManagers() {
+				TaskResult result = null;
+				try {
+					result = taskExec.execute(context, task);
+				} catch (e) {
+					log.error("Failed to process task", e)
+					result = new TaskResult(
+					        code: TaskResult.Code.FAILURE,
+							message: e.message
+					)
+				}
 
-        Set<Class<? extends OsPackageManager>> clazzes = reflectionService.getSubTypesOf(OsPackageManager.class)
+				exec.results += result
 
-        def managers = [];
+				if (!result)
+					throw new Exception("No result returned")
 
-        clazzes.each { clazz ->
-            OsPackageManager manager = beanService.get(clazz);
+				if (result.code != TaskResult.Code.SUCCESS)
+					throw new Exception(result.toString())
+			}
 
-            log.debug("Manager ${manager}")
-            if (manager != null && !managers.contains(manager) && manager.available()) {
-                log.info("Found package manager: {}", manager.name())
-                managers << manager
-            }
+			exec.state = State.COMPLETE
+		} catch (e) {
+			log.error("Failed to process job", e)
+			exec.state = State.FAILED
+		}
 
-        }
-
-
-        return managers
-    }
+		return exec
+	}
 }

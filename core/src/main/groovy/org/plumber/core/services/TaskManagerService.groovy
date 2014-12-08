@@ -664,102 +664,71 @@
 
 
 
-package org.plumber.common.services
+package org.plumber.core.services
 
 import groovy.util.logging.Slf4j
-import org.plumber.client.domain.Execution
-import org.plumber.client.domain.Job
-import org.plumber.client.domain.Requirements
-import org.plumber.client.domain.State
-import org.plumber.client.domain.TaskExecutor
-import org.plumber.client.domain.TaskResult
-import org.springframework.beans.factory.ObjectFactory
+import org.plumber.client.domain.Task
+import org.plumber.client.domain.TaskType
+import org.plumber.common.services.ReflectionService
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.stereotype.Service
 
+import javax.annotation.PostConstruct
+
 /**
- * Created by jglanz on 11/17/14.
+ * Created by jglanz on 11/18/14.
  */
 
 @Service
+@Order(Ordered.LOWEST_PRECEDENCE)
 @Slf4j
-class JobService {
+class TaskManagerService {
 
-	@Autowired
-	TaskManagerService taskManagerService
+	Map<String, TaskType> taskTypes = [:]
 
 	@Autowired
 	PackageManagerService packageManagerService
 
 	@Autowired
-	ObjectFactory<JobContext> jobContextFactory
+	private ReflectionService reflectionService
 
-	Job parseJob(Map<?,?> json) {
-		def tasksJson = json.tasks
-		json.tasks = null
+	@Autowired
+	private BeanService beanService
 
-		Job job = new Job(json)
-		job.tasks = taskManagerService.parseTasks(tasksJson)
 
-		return job
-	}
+	void refresh() {
+		Set<Class<? extends TaskType>> clazzes = reflectionService.getSubTypesOf(TaskType.class)
+		log.info("Found task classes ${clazzes}")
 
-	void ensureRequirements(Job job) {
-		job.tasks.each { task ->
-			Requirements req = taskManagerService.getTaskType(task.type)?.requirements()
-			req?.packages?.each { it ->
-				packageManagerService.ensurePackage(it)
+		clazzes.each { clazz ->
+			TaskType taskType = beanService.get(clazz);
+
+			if (taskType != null && !taskTypes.containsValue(taskType)) {
+				log.info("Found task type: {}", taskType.name())
+				taskTypes[taskType.name()] = taskType
 			}
+
 		}
 	}
 
-	Execution execute(JobContext context, Job job) {
-		Execution exec = new Execution()
-		job.executions += exec
-		if (!context)
-			context = jobContextFactory.object
+	TaskType getTaskType(String alias) {
+		return taskTypes[alias]
+	}
 
-		context.execution = exec
+	List<Task> parseTasks(json) {
+		List<Task> tasks = []
 
-		try {
-			//Make sure the job can be execute on this machine
-			ensureRequirements(job)
+		json?.each { it ->
+			TaskType type = taskTypes[(String) it.type]
+			if (!type)
+				throw new IllegalArgumentException("task.type.unknown.${it.type}")
 
-			exec.state = State.EXECUTING
-
-			job.tasks.each { task ->
-				TaskExecutor taskExec = taskManagerService.getTaskType(task.type)?.executor()
-				if (!taskExec) {
-					throw new Exception("Failed to get task executor for type ${task.type}")
-
-				}
-
-				TaskResult result = null;
-				try {
-					result = taskExec.execute(context, task);
-				} catch (e) {
-					log.error("Failed to process task", e)
-					result = new TaskResult(
-					        code: TaskResult.Code.FAILURE,
-							message: e.message
-					)
-				}
-
-				exec.results += result
-
-				if (!result)
-					throw new Exception("No result returned")
-
-				if (result.code != TaskResult.Code.SUCCESS)
-					throw new Exception(result.toString())
-			}
-
-			exec.state = State.COMPLETE
-		} catch (e) {
-			log.error("Failed to process job", e)
-			exec.state = State.FAILED
+			tasks += new Task(it)
 		}
 
-		return exec
+		return tasks
 	}
+
 }

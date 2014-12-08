@@ -669,15 +669,20 @@ package org.plumber.core.config
 import groovy.util.logging.Slf4j
 import org.plumber.common.domain.ContextHolder
 import org.plumber.common.services.FileService
+import org.plumber.core.services.PackageManagerService
+import org.plumber.core.services.TaskManagerService
 import org.plumber.common.util.Functions
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.context.embedded.AnnotationConfigEmbeddedWebApplicationContext
-import org.springframework.context.ApplicationContext
+import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.event.ContextRefreshedEvent
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.core.io.DefaultResourceLoader
 
 /**
@@ -697,28 +702,51 @@ class LoaderConfig {
 	@Value('${extraPath:}')
 	String extraPath
 
+	private ContextHolder contextHolder
 
 	@Bean(name="PlumbingContext")
-	public ContextHolder loadContexts(@Qualifier("PlumbingLoader") URLClassLoader loader) {
+	@Order(Ordered.LOWEST_PRECEDENCE)
+	public ContextHolder loadContexts(@Qualifier("PlumbingLoader") final URLClassLoader loader) {
 		log.info("Loading contexts")
-		ArrayList<AnnotationConfigApplicationContext> contexts = new ArrayList<>()
+		final ArrayList<AnnotationConfigApplicationContext> contexts = new ArrayList<>()
 
-		for (URL url : loader.findResources('plumber.properties')) {
-			Properties props = new Properties()
-			props.load(url.openStream())
+		applicationContext.addApplicationListener(new ApplicationListener<ContextRefreshedEvent>() {
+			@Override
+			void onApplicationEvent(ContextRefreshedEvent event) {
+				if (!(event.source instanceof AnnotationConfigEmbeddedWebApplicationContext))
+					return
 
-			String scanPackage = props.getProperty("scan", null)
-			log.info("Going to scan package ${scanPackage}")
-			if (scanPackage) {
-				AnnotationConfigApplicationContext subContext = new AnnotationConfigApplicationContext(scanPackage)
-				subContext.setParent(applicationContext)
-				subContext.start()
+				Thread.currentThread().setContextClassLoader(loader)
+				AnnotationConfigEmbeddedWebApplicationContext context = (AnnotationConfigEmbeddedWebApplicationContext) event.source
+				for (URL url : loader.findResources('plumber.properties')) {
+					Properties props = new Properties()
+					props.load(url.openStream())
 
-				contexts.add(subContext)
+
+					String scanPackage = props.getProperty("scan", null)
+					log.info("Going to scan package ${scanPackage}")
+					if (scanPackage) {
+						AnnotationConfigApplicationContext subContext = new AnnotationConfigApplicationContext()
+						subContext.setParent(context)
+						subContext.scan(scanPackage)
+						subContext.refresh()
+						subContext.start()
+
+						contexts.add(subContext)
+					}
+				}
+
+
+				TaskManagerService taskManagerService = context.getBean(TaskManagerService.class)
+				PackageManagerService packageManagerService = context.getBean(PackageManagerService.class)
+				taskManagerService.refresh()
+				packageManagerService.refresh()
+
 			}
-		}
+		})
 
-		return new ContextHolder(contexts:contexts)
+		contextHolder = new ContextHolder(contexts:contexts)
+		return contextHolder
 	}
 
 	@Bean(name="PlumbingLoader")
@@ -740,7 +768,7 @@ class LoaderConfig {
 		}
 
 
-		URLClassLoader loader = new URLClassLoader(Functions.toArray(urls, URL.class), applicationContext.getClassLoader())
+		URLClassLoader loader = new URLClassLoader(Functions.toArray(urls, URL.class), getClass().classLoader)
 		Thread.currentThread().setContextClassLoader(loader)
 		applicationContext.setResourceLoader(new DefaultResourceLoader(loader))
 
