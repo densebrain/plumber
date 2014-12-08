@@ -1,9 +1,0 @@
-{
-	"id": "2",
-	"type": "S3Upload",
-	"args": {
-		"fileUrl": "context://1/result",
-		"presignedDestinationUrl": "https://rads-test.s3.amazonaws.com/test-upload?AWSAccessKeyId=AKIAJP237AKYAGW67MYQ&Expires=1417820079&Signature=hCwCw9bBySW7OefQzQNM%2Fq4TOhY%3D",
-		"contentType": "text/plain"
-	}
-}
