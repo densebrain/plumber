@@ -7,3 +7,5 @@ include 'client'
 
 include 'test'
 
+include 'core'
+
