@@ -666,9 +666,9 @@
 
 package org.plumber.manager.services
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import groovy.transform.CompileStatic
 import org.plumber.client.domain.Execution
 import org.plumber.common.domain.Worker
 import org.plumber.common.services.FileService
@@ -692,6 +692,7 @@ import org.springframework.stereotype.Service
 
 @Service
 @Slf4j
+@CompileStatic
 class JobManagerService {
 
 	@Autowired
@@ -700,8 +701,6 @@ class JobManagerService {
 	@Autowired
 	private FileService files
 
-	@Autowired
-	private ObjectMapper objectMapper
 
 	@Value('${local.server.port:0}')
 	private int localPort
@@ -724,13 +723,15 @@ class JobManagerService {
 			log.info("Loading persisted incomplete jobs")
 
 			String jobsJson = pendingJobsFile.text
-			List<JobHolder> persistedJobs = new Gson().fromJson(jobsJson, new TypeToken<List<JobHolder>>() {}.getType());
+			List<JobHolder> persistedJobs = (List<JobHolder>) new Gson().fromJson(jobsJson, new TypeToken<List<JobHolder>>() {}.getType());
 
 			pendingJobs.addAll(persistedJobs)
 		}
 
 		log.info("Started Manager on ${serverPort}")
 	}
+
+
 
 	void persist() {
 		synchronized (pendingJobs) {
@@ -742,7 +743,10 @@ class JobManagerService {
 	}
 
 	File getJobFile(String id) {
-		return new File(files.cacheDir, "jobs/${id}.json")
+		File dir = new File(files.cacheDir, 'jobs')
+		if (!dir.exists())
+			dir.mkdirs()
+		return new File(dir, "${id}.json")
 	}
 
 	void persist(Job job) {
@@ -752,8 +756,17 @@ class JobManagerService {
 
 	Job get(String id) {
 		File jobFile = getJobFile(id)
-		Job job = new Gson().fromJson(jobFile.text)
+		Job job = new Gson().fromJson(jobFile.text, Job.class)
 		return job
+	}
+
+	List<Job> getAllPending() {
+		List<Job> jobs = []
+		for (JobHolder holder : pendingJobs) {
+			jobs += holder.job
+		}
+
+		return jobs
 	}
 
 	Job add(Job job) {

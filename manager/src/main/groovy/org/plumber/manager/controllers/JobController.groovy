@@ -696,9 +696,6 @@ class JobController {
     @Autowired
     JobManagerService jobManagerService
 
-    @Autowired
-    HttpServletRequest request
-
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
@@ -712,7 +709,7 @@ class JobController {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     List<Job> get() {
-        return jobManagerService.getAll()
+        return jobManagerService.getAllPending()
     }
 
     @GET

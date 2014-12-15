@@ -14,6 +14,7 @@ buildscript {
 		jacksonVersion = '2.4.4'
 		slf4jVersion = '1.6.4'
 		springBootVersion = '1.2.0.RC2'
+		tomcatVersion = '8.0.15'
 
 	}
 
@@ -55,7 +56,7 @@ allprojects {
 	apply plugin: 'rebel'
 
 	group = 'org.plumber'
-	version = '1.0.1'
+	version = '1.0.2'
 
 	sourceCompatibility = 1.8
 	targetCompatibility = 1.8
@@ -139,9 +140,15 @@ project(':common') {
         compile group: 'org.slf4j', name: 'slf4j-api', version: slf4jVersion
 		compile 'commons-lang:commons-lang:2.2'
 	    compile "org.reflections:reflections:0.9.9-RC1"
-        compile group: 'org.springframework', name: 'spring-webmvc', version:springVersion
+        compile group: 'org.springframework', name: 'spring-core', version:springVersion
+	    compile group: 'org.springframework', name: 'spring-beans', version:springVersion
+	    compile group: 'org.springframework', name: 'spring-context', version:springVersion
+	    compile group: 'org.springframework', name: 'spring-web', version:springVersion
 
-        testCompile group: 'junit', name: 'junit', version: '4.11'
+	    testCompile "org.springframework:spring-test:${springVersion}"
+
+
+	    testCompile group: 'junit', name: 'junit', version: '4.11'
     }
 
 
@@ -157,29 +164,27 @@ project(':core') {
 	dependencies {
 		compile project(':common')
 		compile "org.springframework.boot:spring-boot-starter:${springBootVersion}"
-		compile "org.springframework.boot:spring-boot-starter-tomcat:${springBootVersion}"
-		compile "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+
 		compile(group: 'javax.servlet', name: 'javax.servlet-api', version:'3.1.0')
 
-		compile("org.apache.tomcat.embed:tomcat-embed-jasper:8.0.15") {
+		compile "org.apache.tomcat.embed:tomcat-embed-core:${tomcatVersion}"
+		compile "org.apache.tomcat.embed:tomcat-embed-logging-juli:${tomcatVersion}"
+		compile("org.apache.tomcat.embed:tomcat-embed-jasper:${tomcatVersion}") {
 			exclude group: 'javax.servlet'
 		}
 
 		compile ("org.glassfish.jersey.ext:jersey-spring3:${jerseyVersion}") {
 			exclude module: 'spring-web'
+			exclude module: 'spring-webmvc'
 			exclude group: 'javax.validation'
 		}
 
-		//providedRuntime("org.springframework.boot:spring-boot-starter-tomcat:${springBootVersion}")
-		compile("org.springframework.boot:spring-boot-starter-tomcat:${springBootVersion}")
 		testCompile "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
 
 	}
 }
 
 project(':worker') {
-	apply plugin: 'war'
-
 	dependencies {
 		compile project(':core')
 	}
@@ -187,8 +192,6 @@ project(':worker') {
 }
 
 project(':manager') {
-	apply plugin: 'war'
-
 	dependencies {
         compile project(':worker')
     }
@@ -202,7 +205,7 @@ project(':test') {
 }
 
 def installableProjects = subprojects.findAll {
-	it.name != 'test' && it.name != 'core'
+	it.name != 'test'
 }
 
 configure(installableProjects) {

@@ -674,9 +674,6 @@ import org.plumber.common.services.FileService
 import org.plumber.common.services.ShellCommand
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.context.embedded.EmbeddedServletContainerInitializedEvent
-import org.springframework.boot.context.embedded.EmbeddedWebApplicationContext
-import org.springframework.context.ApplicationListener
 import org.springframework.stereotype.Service
 
 import javax.annotation.PostConstruct
@@ -688,7 +685,7 @@ import javax.annotation.PreDestroy
 
 @Service
 @Slf4j
-class ConfigService implements Constants, ApplicationListener<EmbeddedServletContainerInitializedEvent> {
+class ConfigService implements Constants {
 
 	private File configFile
 
@@ -700,8 +697,6 @@ class ConfigService implements Constants, ApplicationListener<EmbeddedServletCon
 	@Autowired
 	ShellCommand shell;
 
-	@Autowired
-	EmbeddedWebApplicationContext embeddedServletContainer
 
 	@Value('${manager:}')
 	String managerHost
@@ -843,8 +838,4 @@ class ConfigService implements Constants, ApplicationListener<EmbeddedServletCon
 
 	}
 
-	@Override
-	void onApplicationEvent(EmbeddedServletContainerInitializedEvent event) {
-		log.info("Worker is up and listening on port ${event.embeddedServletContainer.port}")
-	}
 }

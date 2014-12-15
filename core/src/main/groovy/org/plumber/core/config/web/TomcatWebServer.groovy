@@ -662,156 +662,160 @@
  * <http://www.gnu.org/licenses/>.
  */
 
-
-
-package org.plumber.core.services
+package org.plumber.core.config.web
 
 import groovy.util.logging.Slf4j
-import org.plumber.client.domain.Job
-import org.plumber.common.domain.Worker
-import org.springframework.beans.factory.ObjectFactory
+import org.apache.catalina.Lifecycle
+import org.apache.catalina.LifecycleEvent
+import org.apache.catalina.LifecycleListener
+import org.apache.catalina.Wrapper
+import org.apache.catalina.startup.Tomcat
+import org.apache.catalina.Context
+import org.apache.tomcat.util.descriptor.web.FilterDef
+import org.apache.tomcat.util.descriptor.web.FilterMap
+import org.plumber.core.config.PlumberApplicationContext
+import org.springframework.beans.factory.DisposableBean
+import org.springframework.beans.factory.InitializingBean
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Qualifier
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.stereotype.Service
+import org.springframework.web.context.ContextLoaderListener
+import org.springframework.web.context.WebApplicationContext
+import org.springframework.web.context.support.WebApplicationContextUtils
 
 import javax.annotation.PostConstruct
-import javax.ws.rs.ProcessingException
-import javax.ws.rs.client.Client
-import javax.ws.rs.client.Entity
-import javax.ws.rs.client.Invocation
-import javax.ws.rs.core.MediaType
+import javax.annotation.PreDestroy
+import javax.servlet.Filter
+import javax.servlet.FilterChain
+import javax.servlet.FilterConfig
+import javax.servlet.ServletException
+import javax.servlet.ServletRequest
+import javax.servlet.ServletResponse
+import javax.servlet.http.HttpServletRequest
 
 /**
- * Created by jglanz on 11/19/14.
+ * Created by jglanz on 12/14/14.
  */
 
-
+@Service
 @Slf4j
-class WorkerService {
+class TomcatWebServer implements InitializingBean, DisposableBean{
 
-
-
-	@Autowired
-	@Qualifier("PlumberInternalClient")
-	Client client
+	Tomcat tomcat
 
 	@Autowired
-	ConfigService configService
+	PlumberApplicationContext applicationContext
+
+	@Autowired(required = false)
+	List<FilterRegistrationBean> filterRegistrationBeans
 
 	@Autowired
-	ObjectFactory<WorkerThread> workerFactory
+	List<ServletRegistrationBean> servletRegistrationBeans
 
-	@Value('${manager:false}')
-	boolean isManager
+	@Value('${plumber.port:9999}')
+	int port
 
-	Worker worker
-
-	List<WorkerThread> workers = []
-
-	protected final Object managerMutex = new Object()
-
-	@PostConstruct
-	protected void setup() {
-
-		String hostname = InetAddress.localHost.canonicalHostName
-		String ip = InetAddress.localHost.hostAddress
-		String name = configService.name
-
-		worker = [
-				name: name,
-				os: System.properties['os.name'],
-				hostname: hostname,
-				host: "${hostname}:${configService.serverPort}",
-				ip: ip,
-				id: configService.config.workerId,
-				jobs: [],
-				osDetails: configService.osDetails
-		]
-
-		register()
-
-		int executorCount = configService.executorCount
-
-		for (i in 1..executorCount) {
-			WorkerThread worker = workerFactory.object
-			worker.name = "Worker ${i}"
-			workers += worker
-		}
+	@Override
+	void destroy() throws Exception {
+		teardown()
 	}
 
-	private Invocation.Builder createRequest(String path, MediaType type) {
-		Invocation.Builder request = client.target("http://${configService.managerHost}/api/${path}").request(type)
-		request.header('workerId', worker.id)
-
-		return request
+	@Override
+	void afterPropertiesSet() throws Exception {
+		setup()
 	}
 
-	protected void updateJobsInternal(Worker updatedWorker) {
-		List<Job> jobsToRemove = []
-		for (Job currentJob : worker.jobs) {
-			boolean exists = false
-			for (Job job : updatedWorker.jobs) {
-				if (job.equals(currentJob)) {
-					exists = true
-					break
+
+	void setup() {
+		if (tomcat != null)
+			destroy()
+
+		tomcat = new Tomcat()
+
+		tomcat.setPort(port)
+
+		Context context = tomcat.addContext("/", new File('.').absolutePath)
+		context.addParameter("contextConfigLocation", "<NONE>")
+
+
+		applicationContext.servletContext = context.servletContext
+		context.servletContext.setAttribute(
+			WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE, applicationContext);
+
+		WebApplicationContextUtils.registerWebApplicationScopes(applicationContext.getBeanFactory(),
+			context.servletContext);
+		WebApplicationContextUtils.registerEnvironmentBeans(applicationContext.getBeanFactory(),
+			context.servletContext);
+
+
+		addFilter(context, "/*", RequestLogFilter.class)
+
+		context.addLifecycleListener(new LifecycleListener() {
+			@Override
+			void lifecycleEvent(LifecycleEvent event) {
+				if (event.getType().equals(Lifecycle.CONFIGURE_START_EVENT)) {
 				}
 			}
+		});
 
-			if (!exists) {
-				jobsToRemove += currentJob
+
+		//Add a request logger for good measure
+		for (ServletRegistrationBean bean : servletRegistrationBeans) {
+			Wrapper wrapper = Tomcat.addServlet(context, bean.servletName, bean.servlet)
+			for (String param : bean.initParameters.keySet()) {
+				wrapper.addInitParameter(param, bean.initParameters[param])
+			}
+			for (String url: bean.urlMappings) {
+				context.addServletMapping(url, bean.servletName)
 			}
 		}
 
-		jobsToRemove.each { job ->
-			log.info("Removing Job ${job}")
-			worker.jobs.remove(job)
-		}
+
+		tomcat.start()
 	}
 
-	@Scheduled(fixedRate = 10000L)
-	void heartbeat() {
-		synchronized (managerMutex) {
-			Invocation.Builder req = createRequest('worker', MediaType.APPLICATION_JSON_TYPE)
-			Worker updatedWorker = req.put(Entity.entity(worker, MediaType.APPLICATION_JSON_TYPE), Worker.class)
+	void addFilter(Context context, String uri, Class<? extends Filter> filterClass) {
+		context.addFilterDef(new FilterDef(filterClass: filterClass.name, filterName: filterClass.simpleName))
 
-			updateJobsInternal(updatedWorker)
-		}
-	}
-
-	void register() {
-		synchronized (managerMutex) {
-			Invocation.Builder req = createRequest('worker', MediaType.APPLICATION_JSON_TYPE)
-			worker = req.post(Entity.entity(worker, MediaType.APPLICATION_JSON_TYPE), Worker.class)
-		}
+		FilterMap map = new FilterMap(filterName: filterClass.simpleName)
+		map.addURLPattern(uri)
+		context.addFilterMap(map)
 	}
 
 
-	Job getJob() {
-
-		Invocation.Builder req = createRequest('worker/job', MediaType.APPLICATION_JSON_TYPE)
-		try {
-			Job job = null
-
-			synchronized (managerMutex) {
-				job = req.get(Job.class)
+	void teardown() {
+		if (tomcat != null) {
+			try {
+				log.debug("Destroying Tomcat")
+				tomcat.stop()
+				tomcat.destroy()
+				log.debug("Destroyed Tomcat")
+			} catch (Exception e) {
+				log.warn("Failed to shutdown tomcat", e)
+			} finally {
+				tomcat = null
 			}
-			if (job) {
-				worker.jobs += job
-				heartbeat()
-			}
-			return job
-		} catch (ProcessingException pe) {
-			if (pe.cause instanceof ConnectException)
-				log.warn('Unable to connect to the plumbing manager')
-			else
-				throw pe
 		}
-
-
 	}
 
+	static class RequestLogFilter implements Filter {
+		@Override
+		void init(FilterConfig filterConfig) throws ServletException {
 
+		}
 
+		@Override
+		void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
+			HttpServletRequest httpServletRequest = (ServletRequest) request
+			log.trace("Request received: ${httpServletRequest.requestURI}")
 
+			chain.doFilter(request,response)
+		}
+
+		@Override
+		void destroy() {
+
+		}
+	}
 }

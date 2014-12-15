@@ -662,13 +662,73 @@
  * <http://www.gnu.org/licenses/>.
  */
 
+package org.plumber.core
 
-
-package org.plumber.core.config
+import groovy.util.logging.Slf4j
+import org.plumber.core.config.PlumberApplicationContext
+import org.springframework.boot.ExitCodeGenerator
+import org.springframework.boot.SpringApplication
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration
+import org.springframework.boot.autoconfigure.PropertyPlaceholderAutoConfiguration
+import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.boot.autoconfigure.groovy.template.GroovyTemplateAutoConfiguration
+import org.springframework.context.ApplicationContext
+import org.springframework.context.annotation.AnnotationConfigApplicationContext
+import org.springframework.context.annotation.ComponentScan
 
 /**
- * Created by jglanz on 11/18/14.
+ * Created by jglanz on 12/14/14.
  */
-interface JerseyConfig {
+
+
+@Slf4j
+//@SpringBootApplication()
+@ComponentScan(basePackages = 'org.plumber')
+//@EnableAutoConfiguration(exclude = PlumberApplicationContext.getExcludedClasses())
+class PlumberApplication {
+
+
+	//AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()
+
+	static SpringApplication app
+	static ApplicationContext context
+	static ApplicationContext parentContext
+
+	static void setParentContext(ApplicationContext _parentContext) {
+		parentContext = _parentContext
+	}
+
+	static void start(String...args) {
+		app = new SpringApplication(PlumberApplication.class, PropertyPlaceholderAutoConfiguration.class)
+		app.setApplicationContextClass(PlumberApplicationContext.class)
+		app.setWebEnvironment(false)
+		context = app.run(args)
+
+		if (parentContext)
+			context.setParent(parentContext)
+
+	}
+
+	static <T> T get(Class<T> clazz) {
+		if (context == null)
+			return null
+
+		return context.getBean(clazz)
+	}
+
+	static void stop() {
+		if (!app)
+			return
+
+		try {
+			app.exit(context)
+		} catch (Exception e) {
+			log.error("Failed to stop Plumber", e)
+		} finally {
+			app = null
+			context = null
+		}
+	}
+
 
 }

@@ -662,156 +662,185 @@
  * <http://www.gnu.org/licenses/>.
  */
 
+package org.plumber.core.config.web
 
+import groovy.transform.TypeChecked
+import org.springframework.boot.context.embedded.RegistrationBean
 
-package org.plumber.core.services
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
-import groovy.util.logging.Slf4j
-import org.plumber.client.domain.Job
-import org.plumber.common.domain.Worker
-import org.springframework.beans.factory.ObjectFactory
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.scheduling.annotation.Scheduled
+import javax.servlet.MultipartConfigElement;
+import javax.servlet.Servlet;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRegistration;
+import javax.servlet.ServletRegistration.Dynamic;
 
-import javax.annotation.PostConstruct
-import javax.ws.rs.ProcessingException
-import javax.ws.rs.client.Client
-import javax.ws.rs.client.Entity
-import javax.ws.rs.client.Invocation
-import javax.ws.rs.core.MediaType
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.springframework.util.Assert;
 
 /**
- * Created by jglanz on 11/19/14.
+ * A {@link org.springframework.boot.context.embedded.ServletContextInitializer} to register {@link Servlet}s in a Servlet 3.0+
+ * container. Similar to the {@link ServletContext#addServlet(String, Servlet)
+ * registration} features provided by {@link ServletContext} but with a Spring Bean
+ * friendly design.
+ * <p>
+ * The {@link #setServlet(Servlet) servlet} must be specified before calling
+ * {@link #onStartup}. URL mapping can be configured used {@link #setUrlMappings} or
+ * omitted when mapping to '/*'. The servlet name will be deduced if not specified.
+ *
+ * @author Phillip Webb
+ * @see org.springframework.boot.context.embedded.ServletContextInitializer
+ * @see ServletContext#addServlet(String, Servlet)
  */
 
+@TypeChecked
+public class ServletRegistrationBean extends RegistrationBean {
 
-@Slf4j
-class WorkerService {
+	private static Log logger = LogFactory.getLog(ServletRegistrationBean.class);
 
+	private static String[] DEFAULT_MAPPINGS = ["/*"] as String[];
 
+	private Servlet servlet;
 
-	@Autowired
-	@Qualifier("PlumberInternalClient")
-	Client client
+	private Set<String> urlMappings = new LinkedHashSet<String>();
 
-	@Autowired
-	ConfigService configService
+	private int loadOnStartup = -1;
 
-	@Autowired
-	ObjectFactory<WorkerThread> workerFactory
+	private MultipartConfigElement multipartConfig;
 
-	@Value('${manager:false}')
-	boolean isManager
-
-	Worker worker
-
-	List<WorkerThread> workers = []
-
-	protected final Object managerMutex = new Object()
-
-	@PostConstruct
-	protected void setup() {
-
-		String hostname = InetAddress.localHost.canonicalHostName
-		String ip = InetAddress.localHost.hostAddress
-		String name = configService.name
-
-		worker = [
-				name: name,
-				os: System.properties['os.name'],
-				hostname: hostname,
-				host: "${hostname}:${configService.serverPort}",
-				ip: ip,
-				id: configService.config.workerId,
-				jobs: [],
-				osDetails: configService.osDetails
-		]
-
-		register()
-
-		int executorCount = configService.executorCount
-
-		for (i in 1..executorCount) {
-			WorkerThread worker = workerFactory.object
-			worker.name = "Worker ${i}"
-			workers += worker
-		}
+	/**
+	 * Create a new {@link ServletRegistrationBean} instance.
+	 */
+	public ServletRegistrationBean() {
 	}
 
-	private Invocation.Builder createRequest(String path, MediaType type) {
-		Invocation.Builder request = client.target("http://${configService.managerHost}/api/${path}").request(type)
-		request.header('workerId', worker.id)
-
-		return request
+	/**
+	 * Create a new {@link ServletRegistrationBean} instance with the specified
+	 * {@link Servlet} and URL mappings.
+	 * @param servlet the servlet being mapped
+	 * @param urlMappings the URLs being mapped
+	 */
+	public ServletRegistrationBean(Servlet servlet, String... urlMappings) {
+		Assert.notNull(servlet, "Servlet must not be null");
+		Assert.notNull(urlMappings, "UrlMappings must not be null");
+		this.servlet = servlet;
+		this.urlMappings.addAll(Arrays.asList(urlMappings));
 	}
 
-	protected void updateJobsInternal(Worker updatedWorker) {
-		List<Job> jobsToRemove = []
-		for (Job currentJob : worker.jobs) {
-			boolean exists = false
-			for (Job job : updatedWorker.jobs) {
-				if (job.equals(currentJob)) {
-					exists = true
-					break
-				}
-			}
-
-			if (!exists) {
-				jobsToRemove += currentJob
-			}
-		}
-
-		jobsToRemove.each { job ->
-			log.info("Removing Job ${job}")
-			worker.jobs.remove(job)
-		}
+	/**
+	 * Returns the servlet being registered.
+	 */
+	protected Servlet getServlet() {
+		return this.servlet;
 	}
 
-	@Scheduled(fixedRate = 10000L)
-	void heartbeat() {
-		synchronized (managerMutex) {
-			Invocation.Builder req = createRequest('worker', MediaType.APPLICATION_JSON_TYPE)
-			Worker updatedWorker = req.put(Entity.entity(worker, MediaType.APPLICATION_JSON_TYPE), Worker.class)
-
-			updateJobsInternal(updatedWorker)
-		}
+	/**
+	 * Sets the servlet to be registered.
+	 */
+	public void setServlet(Servlet servlet) {
+		Assert.notNull(servlet, "Servlet must not be null");
+		this.servlet = servlet;
 	}
 
-	void register() {
-		synchronized (managerMutex) {
-			Invocation.Builder req = createRequest('worker', MediaType.APPLICATION_JSON_TYPE)
-			worker = req.post(Entity.entity(worker, MediaType.APPLICATION_JSON_TYPE), Worker.class)
-		}
+	/**
+	 * Set the URL mappings for the servlet. If not specified the mapping will default to
+	 * '/'. This will replace any previously specified mappings.
+	 * @param urlMappings the mappings to set
+	 * @see #addUrlMappings(String...)
+	 */
+	public void setUrlMappings(Collection<String> urlMappings) {
+		Assert.notNull(urlMappings, "UrlMappings must not be null");
+		this.urlMappings = new LinkedHashSet<String>(urlMappings);
 	}
 
-
-	Job getJob() {
-
-		Invocation.Builder req = createRequest('worker/job', MediaType.APPLICATION_JSON_TYPE)
-		try {
-			Job job = null
-
-			synchronized (managerMutex) {
-				job = req.get(Job.class)
-			}
-			if (job) {
-				worker.jobs += job
-				heartbeat()
-			}
-			return job
-		} catch (ProcessingException pe) {
-			if (pe.cause instanceof ConnectException)
-				log.warn('Unable to connect to the plumbing manager')
-			else
-				throw pe
-		}
-
-
+	/**
+	 * Return a mutable collection of the URL mappings for the servlet.
+	 * @return the urlMappings
+	 */
+	public Collection<String> getUrlMappings() {
+		return this.urlMappings;
 	}
 
+	/**
+	 * Add URL mappings for the servlet.
+	 * @param urlMappings the mappings to add
+	 * @see #setUrlMappings(Collection)
+	 */
+	public void addUrlMappings(String... urlMappings) {
+		Assert.notNull(urlMappings, "UrlMappings must not be null");
+		this.urlMappings.addAll(Arrays.asList(urlMappings));
+	}
 
+	/**
+	 * Sets the <code>loadOnStartup</code> priority. See
+	 * {@link ServletRegistration.Dynamic#setLoadOnStartup} for details.
+	 */
+	public void setLoadOnStartup(int loadOnStartup) {
+		this.loadOnStartup = loadOnStartup;
+	}
 
+	/**
+	 * Set the the {@link MultipartConfigElement multi-part configuration}.
+	 * @param multipartConfig the muti-part configuration to set or {@code null}
+	 */
+	public void setMultipartConfig(MultipartConfigElement multipartConfig) {
+		this.multipartConfig = multipartConfig;
+	}
+
+	/**
+	 * Returns the {@link MultipartConfigElement multi-part configuration} to be applied
+	 * or {@code null}.
+	 */
+	public MultipartConfigElement getMultipartConfig() {
+		return this.multipartConfig;
+	}
+
+	/**
+	 * Returns the servlet name that will be registered.
+	 */
+	public String getServletName() {
+		return getOrDeduceName(this.servlet);
+	}
+
+	@Override
+	public void onStartup(ServletContext servletContext) throws ServletException {
+		Assert.notNull(this.servlet, "Servlet must not be null");
+		String name = getServletName();
+		if (!isEnabled()) {
+			logger.info("Filter " + name + " was not registered (disabled)");
+			return;
+		}
+		logger.info("Mapping servlet: '" + name + "' to " + this.urlMappings);
+		Dynamic added = servletContext.addServlet(name, this.servlet);
+		if (added == null) {
+			logger.info("Servlet " + name + " was not registered "
+				+ "(possibly already registered?)");
+			return;
+		}
+		configure(added);
+	}
+
+	/**
+	 * Configure registration settings. Subclasses can override this method to perform
+	 * additional configuration if required.
+	 */
+	protected void configure(ServletRegistration.Dynamic registration) {
+		super.configure(registration);
+		String[] urlMapping = this.urlMappings
+			.toArray(new String[this.urlMappings.size()]);
+		if (urlMapping.length == 0) {
+			urlMapping = DEFAULT_MAPPINGS;
+		}
+		registration.addMapping(urlMapping);
+		registration.setLoadOnStartup(this.loadOnStartup);
+		if (this.multipartConfig != null) {
+			registration.setMultipartConfig(this.multipartConfig);
+		}
+	}
 
 }

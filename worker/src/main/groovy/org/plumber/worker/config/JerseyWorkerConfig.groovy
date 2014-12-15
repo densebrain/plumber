@@ -667,7 +667,7 @@
 package org.plumber.worker.config
 
 import org.glassfish.jersey.server.ResourceConfig
-import org.plumber.core.config.JerseyConfig
+import org.plumber.core.config.web.JerseyConfig
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 

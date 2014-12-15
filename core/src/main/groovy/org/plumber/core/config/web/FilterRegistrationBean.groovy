@@ -662,86 +662,294 @@
  * <http://www.gnu.org/licenses/>.
  */
 
+package org.plumber.core.config.web
 
-
-package org.plumber.core.config
-
-
-import org.glassfish.jersey.server.ResourceConfig
-import org.glassfish.jersey.server.spring.SpringComponentProvider
-import org.glassfish.jersey.servlet.ServletContainer
-import org.glassfish.jersey.servlet.ServletProperties
-import org.plumber.client.services.Plumber
-import org.plumber.core.config.JerseyConfig
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.autoconfigure.AutoConfigureBefore
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
-import org.springframework.boot.autoconfigure.web.DispatcherServletAutoConfiguration
+import org.springframework.boot.context.embedded.RegistrationBean
 import org.springframework.boot.context.embedded.ServletRegistrationBean
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
-import org.springframework.core.Ordered
 
-import org.springframework.core.annotation.Order
-import org.springframework.web.WebApplicationInitializer
-import org.springframework.web.filter.RequestContextFilter
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
-import javax.servlet.ServletContext
-import javax.servlet.ServletException
-import javax.servlet.ServletRegistration
-import javax.ws.rs.client.Client
+import javax.servlet.DispatcherType;
+import javax.servlet.Filter;
+import javax.servlet.FilterRegistration;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.springframework.util.Assert;
 
 /**
- * Created by jglanz on 11/14/14.
+ * A {@link org.springframework.boot.context.embedded.ServletContextInitializer} to register {@link Filter}s in a Servlet 3.0+
+ * container. Similar to the {@link ServletContext#addFilter(String, Filter) registration}
+ * features provided by {@link ServletContext} but with a Spring Bean friendly design.
+ * <p>
+ * The {@link #setFilter(Filter) Filter} must be specified before calling
+ * {@link #onStartup(ServletContext)}. Registrations can be associated with
+ * {@link #setUrlPatterns URL patterns} and/or servlets (either by
+ * {@link #setServletNames name} or via a {@link #setServletRegistrationBeans
+ * ServletRegistrationBean}s. When no URL pattern or servlets are specified the filter
+ * will be associated to '/*'. The filter name will be deduced if not specified.
+ *
+ * @author Phillip Webb
+ * @see org.springframework.boot.context.embedded.ServletContextInitializer
+ * @see ServletContext#addFilter(String, Filter)
  */
-@Configuration
-@ConditionalOnClass([SpringComponentProvider.class, ServletRegistration.class])
-@ConditionalOnBean(ResourceConfig.class)
-@ConditionalOnWebApplication
-@Order(Ordered.HIGHEST_PRECEDENCE)
-@AutoConfigureBefore(DispatcherServletAutoConfiguration.class)
-class JerseyConfiguration implements WebApplicationInitializer {
+public class FilterRegistrationBean extends RegistrationBean {
 
-    @Autowired
-    private JerseyConfig config;
+	private static Log logger = LogFactory.getLog(FilterRegistrationBean.class);
 
+	static final EnumSet<DispatcherType> ASYNC_DISPATCHER_TYPES = EnumSet.of(
+		DispatcherType.FORWARD, DispatcherType.INCLUDE, DispatcherType.REQUEST,
+		DispatcherType.ASYNC);
 
-    @Bean
-    Client createClient() {
-        return Plumber.createClient()
-    }
+	static final EnumSet<DispatcherType> NON_ASYNC_DISPATCHER_TYPES = EnumSet.of(
+		DispatcherType.FORWARD, DispatcherType.INCLUDE, DispatcherType.REQUEST);
 
-    @Bean
-    @ConditionalOnMissingBean
-    public RequestContextFilter requestContextFilter() {
-        return new RequestContextFilter();
-    }
+	private static final String[] DEFAULT_URL_MAPPINGS = { "/*" };
 
-    @Bean
-    @ConditionalOnMissingBean(name = "jerseyServletRegistration")
-    public ServletRegistrationBean jerseyServletRegistration() {
-        ServletRegistrationBean registration = new ServletRegistrationBean(
-                new ServletContainer(), "/api/*");
-        registration.addInitParameter(ServletProperties.JAXRS_APPLICATION_CLASS,
-                config.getClass().getName());
-        registration.setName("jerseyServlet");
+	private Filter filter;
 
-        return registration;
-    }
+	private Set<ServletRegistrationBean> servletRegistrationBeans = new LinkedHashSet<ServletRegistrationBean>();
 
-    @Override
-    public void onStartup(ServletContext servletContext) throws ServletException {
-        // We need to switch *off* the Jersey WebApplicationInitializer because it
-        // will try and register a ContextLoaderListener which we don't need
-        servletContext.setInitParameter("contextConfigLocation", "<NONE>");
+	private Set<String> servletNames = new LinkedHashSet<String>();
 
+	private Set<String> urlPatterns = new LinkedHashSet<String>();
 
-    }
+	private EnumSet<DispatcherType> dispatcherTypes;
 
+	private boolean matchAfter = false;
 
+	/**
+	 * Create a new {@link FilterRegistrationBean} instance.
+	 */
+	public FilterRegistrationBean() {
+	}
 
+	/**
+	 * Create a new {@link FilterRegistrationBean} instance to be registered with the
+	 * specified {@link ServletRegistrationBean}s.
+	 * @param filter the filter to register
+	 * @param servletRegistrationBeans associate {@link ServletRegistrationBean}s
+	 */
+	public FilterRegistrationBean(Filter filter,
+	                              ServletRegistrationBean... servletRegistrationBeans) {
+		Assert.notNull(filter, "Filter must not be null");
+		Assert.notNull(servletRegistrationBeans,
+			"ServletRegistrationBeans must not be null");
+		this.filter = filter;
+		for (ServletRegistrationBean servletRegistrationBean : servletRegistrationBeans) {
+			this.servletRegistrationBeans.add(servletRegistrationBean);
+		}
+	}
+
+	/**
+	 * Returns the filter being registered.
+	 */
+	protected Filter getFilter() {
+		return this.filter;
+	}
+
+	/**
+	 * Set the filter to be registered.
+	 */
+	public void setFilter(Filter filter) {
+		Assert.notNull(filter, "Filter must not be null");
+		this.filter = filter;
+	}
+
+	/**
+	 * Set {@link ServletRegistrationBean}s that the filter will be registered against.
+	 * @param servletRegistrationBeans the Servlet registration beans
+	 */
+	public void setServletRegistrationBeans(
+		Collection<? extends ServletRegistrationBean> servletRegistrationBeans) {
+		Assert.notNull(servletRegistrationBeans,
+			"ServletRegistrationBeans must not be null");
+		this.servletRegistrationBeans = new LinkedHashSet<ServletRegistrationBean>(
+			servletRegistrationBeans);
+	}
+
+	/**
+	 * Return a mutable collection of the {@link ServletRegistrationBean} that the filter
+	 * will be registered against. {@link ServletRegistrationBean}s.
+	 * @return the Servlet registration beans
+	 * @see #setServletNames
+	 * @see #setUrlPatterns
+	 */
+	public Collection<ServletRegistrationBean> getServletRegistrationBeans() {
+		return this.servletRegistrationBeans;
+	}
+
+	/**
+	 * Add {@link ServletRegistrationBean}s for the filter.
+	 * @param servletRegistrationBeans the servlet registration beans to add
+	 * @see #setServletRegistrationBeans
+	 */
+	public void addServletRegistrationBeans(
+		ServletRegistrationBean... servletRegistrationBeans) {
+		Assert.notNull(servletRegistrationBeans,
+			"ServletRegistrationBeans must not be null");
+		for (ServletRegistrationBean servletRegistrationBean : servletRegistrationBeans) {
+			this.servletRegistrationBeans.add(servletRegistrationBean);
+		}
+	}
+
+	/**
+	 * Set servlet names that the filter will be registered against. This will replace any
+	 * previously specified servlet names.
+	 * @param servletNames the servlet names
+	 * @see #setServletRegistrationBeans
+	 * @see #setUrlPatterns
+	 */
+	public void setServletNames(Collection<String> servletNames) {
+		Assert.notNull(servletNames, "ServletNames must not be null");
+		this.servletNames = new LinkedHashSet<String>(servletNames);
+	}
+
+	/**
+	 * Return a mutable collection of servlet names that the filter will be registered
+	 * against.
+	 * @return the servlet names
+	 */
+	public Collection<String> getServletNames() {
+		return this.servletNames;
+	}
+
+	/**
+	 * Add servlet names for the filter.
+	 * @param servletNames the servlet names to add
+	 */
+	public void addServletNames(String... servletNames) {
+		Assert.notNull(servletNames, "ServletNames must not be null");
+		this.servletNames.addAll(Arrays.asList(servletNames));
+	}
+
+	/**
+	 * Set the URL patterns that the filter will be registered against. This will replace
+	 * any previously specified URL patterns.
+	 * @param urlPatterns the URL patterns
+	 * @see #setServletRegistrationBeans
+	 * @see #setServletNames
+	 */
+	public void setUrlPatterns(Collection<String> urlPatterns) {
+		Assert.notNull(urlPatterns, "UrlPatterns must not be null");
+		this.urlPatterns = new LinkedHashSet<String>(urlPatterns);
+	}
+
+	/**
+	 * Return a mutable collection of URL patterns that the filter will be registered
+	 * against.
+	 * @return the URL patterns
+	 */
+	public Collection<String> getUrlPatterns() {
+		return this.urlPatterns;
+	}
+
+	/**
+	 * Add URL patterns that the filter will be registered against.
+	 * @param urlPatterns the URL patterns
+	 */
+	public void addUrlPatterns(String... urlPatterns) {
+		Assert.notNull(urlPatterns, "UrlPatterns must not be null");
+		for (String urlPattern : urlPatterns) {
+			this.urlPatterns.add(urlPattern);
+		}
+	}
+
+	/**
+	 * Convenience method to {@link #setDispatcherTypes(EnumSet) set dispatcher types}
+	 * using the specified elements.
+	 */
+	public void setDispatcherTypes(DispatcherType first, DispatcherType... rest) {
+		this.dispatcherTypes = EnumSet.of(first, rest);
+	}
+
+	/**
+	 * Sets the dispatcher types that should be used with the registration. If not
+	 * specified the types will be deduced based on the value of
+	 * {@link #isAsyncSupported()}.
+	 */
+	public void setDispatcherTypes(EnumSet<DispatcherType> dispatcherTypes) {
+		this.dispatcherTypes = dispatcherTypes;
+	}
+
+	/**
+	 * Set if the filter mappings should be matched after any declared filter mappings of
+	 * the ServletContext. Defaults to {@code false} indicating the filters are supposed
+	 * to be matched before any declared filter mappings of the ServletContext.
+	 */
+	public void setMatchAfter(boolean matchAfter) {
+		this.matchAfter = matchAfter;
+	}
+
+	/**
+	 * Return if filter mappings should be matched after any declared Filter mappings of
+	 * the ServletContext.
+	 */
+	public boolean isMatchAfter() {
+		return this.matchAfter;
+	}
+
+	@Override
+	public void onStartup(ServletContext servletContext) throws ServletException {
+		Assert.notNull(this.filter, "Filter must not be null");
+		String name = getOrDeduceName(this.filter);
+		if (!isEnabled()) {
+			logger.info("Filter " + name + " was not registered (disabled)");
+			return;
+		}
+		FilterRegistration.Dynamic added = servletContext.addFilter(name, this.filter);
+		if (added == null) {
+			logger.info("Filter " + name + " was not registered "
+				+ "(possibly already registered?)");
+			return;
+		}
+		configure(added);
+	}
+
+	/**
+	 * Configure registration settings. Subclasses can override this method to perform
+	 * additional configuration if required.
+	 */
+	protected void configure(FilterRegistration.Dynamic registration) {
+		super.configure(registration);
+		EnumSet<DispatcherType> dispatcherTypes = this.dispatcherTypes;
+		if (dispatcherTypes == null) {
+			dispatcherTypes = (isAsyncSupported() ? ASYNC_DISPATCHER_TYPES
+				: NON_ASYNC_DISPATCHER_TYPES);
+		}
+
+		Set<String> servletNames = new LinkedHashSet<String>();
+		for (ServletRegistrationBean servletRegistrationBean : this.servletRegistrationBeans) {
+			servletNames.add(servletRegistrationBean.getServletName());
+		}
+		servletNames.addAll(this.servletNames);
+
+		if (servletNames.isEmpty() && this.urlPatterns.isEmpty()) {
+			logger.info("Mapping filter: '" + registration.getName() + "' to: "
+				+ Arrays.asList(DEFAULT_URL_MAPPINGS));
+			registration.addMappingForUrlPatterns(dispatcherTypes, this.matchAfter,
+				DEFAULT_URL_MAPPINGS);
+		}
+		else {
+			if (servletNames.size() > 0) {
+				logger.info("Mapping filter: '" + registration.getName()
+					+ "' to servlets: " + servletNames);
+				registration.addMappingForServletNames(dispatcherTypes, this.matchAfter,
+					servletNames.toArray(new String[servletNames.size()]));
+			}
+			if (this.urlPatterns.size() > 0) {
+				logger.info("Mapping filter: '" + registration.getName() + "' to urls: "
+					+ this.urlPatterns);
+				registration.addMappingForUrlPatterns(dispatcherTypes, this.matchAfter,
+					this.urlPatterns.toArray(new String[this.urlPatterns.size()]));
+			}
+		}
+	}
 
 }

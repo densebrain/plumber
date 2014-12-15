@@ -675,7 +675,7 @@ import org.plumber.common.util.Functions
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.context.embedded.AnnotationConfigEmbeddedWebApplicationContext
+import org.springframework.context.ApplicationContext
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean
@@ -691,13 +691,14 @@ import org.springframework.core.io.DefaultResourceLoader
 
 @Configuration
 @Slf4j
+
 class LoaderConfig {
 
 	@Autowired
 	private FileService fileService
 
 	@Autowired
-	private AnnotationConfigEmbeddedWebApplicationContext applicationContext;
+	private ApplicationContext applicationContext;
 
 	@Value('${extraPath:}')
 	String extraPath
@@ -709,15 +710,15 @@ class LoaderConfig {
 	public ContextHolder loadContexts(@Qualifier("PlumbingLoader") final URLClassLoader loader) {
 		log.info("Loading contexts")
 		final ArrayList<AnnotationConfigApplicationContext> contexts = new ArrayList<>()
-
+		final ApplicationContext applicationContext = this.applicationContext
 		applicationContext.addApplicationListener(new ApplicationListener<ContextRefreshedEvent>() {
 			@Override
 			void onApplicationEvent(ContextRefreshedEvent event) {
-				if (!(event.source instanceof AnnotationConfigEmbeddedWebApplicationContext))
+				if (!(event.source.equals(applicationContext)))
 					return
 
 				Thread.currentThread().setContextClassLoader(loader)
-				AnnotationConfigEmbeddedWebApplicationContext context = (AnnotationConfigEmbeddedWebApplicationContext) event.source
+				ApplicationContext context = (ApplicationContext) event.source
 				for (URL url : loader.findResources('plumber.properties')) {
 					Properties props = new Properties()
 					props.load(url.openStream())

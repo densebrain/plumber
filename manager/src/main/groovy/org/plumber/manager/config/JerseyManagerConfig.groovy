@@ -667,9 +667,10 @@
 package org.plumber.manager.config
 
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider
+import groovy.util.logging.Slf4j
 import org.glassfish.jersey.jackson.JacksonFeature
 import org.glassfish.jersey.server.ResourceConfig
-import org.plumber.core.config.JerseyConfig
+import org.plumber.core.config.web.JerseyConfig
 import org.plumber.manager.controllers.JobController
 import org.plumber.manager.controllers.WorkerController
 import org.springframework.stereotype.Component
@@ -678,6 +679,7 @@ import org.springframework.stereotype.Component
  * Created by jglanz on 11/17/14.
  */
 @Component
+@Slf4j
 class JerseyManagerConfig extends ResourceConfig implements JerseyConfig {
 
 	JerseyManagerConfig() {

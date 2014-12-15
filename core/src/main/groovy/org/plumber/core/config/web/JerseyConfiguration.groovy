@@ -664,154 +664,65 @@
 
 
 
-package org.plumber.core.services
+package org.plumber.core.config.web
 
-import groovy.util.logging.Slf4j
-import org.plumber.client.domain.Job
-import org.plumber.common.domain.Worker
-import org.springframework.beans.factory.ObjectFactory
+import org.glassfish.jersey.servlet.ServletContainer
+import org.glassfish.jersey.servlet.ServletProperties
+import org.plumber.client.services.Plumber
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Qualifier
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 
-import javax.annotation.PostConstruct
-import javax.ws.rs.ProcessingException
+import javax.servlet.ServletContext
+import javax.servlet.ServletException
 import javax.ws.rs.client.Client
-import javax.ws.rs.client.Entity
-import javax.ws.rs.client.Invocation
-import javax.ws.rs.core.MediaType
 
 /**
- * Created by jglanz on 11/19/14.
+ * Created by jglanz on 11/14/14.
  */
+@Configuration
+//@ConditionalOnClass([SpringComponentProvider.class, ServletRegistration.class])
+//@ConditionalOnBean(ResourceConfig.class)
+//@ConditionalOnWebApplication
+//@Order(Ordered.HIGHEST_PRECEDENCE)
+//@AutoConfigureBefore(DispatcherServletAutoConfiguration.class)
+class JerseyConfiguration {
+
+    @Autowired
+    private JerseyConfig config;
 
 
-@Slf4j
-class WorkerService {
+    @Bean(name="PlumberInternalClient")
+    Client createClient() {
+        return Plumber.createClient()
+    }
 
 
 
-	@Autowired
-	@Qualifier("PlumberInternalClient")
-	Client client
+    @Bean(name="plumberJerseyServletRegistration")
+    @ConditionalOnMissingBean(name = "plumberJerseyServletRegistration")
+    public ServletRegistrationBean jerseyServletRegistration() {
+        ServletRegistrationBean registration = new ServletRegistrationBean(
+                new ServletContainer(), "/api/*");
+        registration.addInitParameter(ServletProperties.JAXRS_APPLICATION_CLASS,
+                config.getClass().getName());
+        registration.setName("jerseyServlet");
 
-	@Autowired
-	ConfigService configService
+        return registration;
+    }
 
-	@Autowired
-	ObjectFactory<WorkerThread> workerFactory
+	@Bean(name="staticFileServlet")
+	@Order(Ordered.LOWEST_PRECEDENCE)
+	public ServletRegistrationBean staticFileRegistration() {
+		ServletRegistrationBean registration = new ServletRegistrationBean(
+			new StaticFileServlet(), "/*");
+		registration.setName("DefaultServlet");
 
-	@Value('${manager:false}')
-	boolean isManager
-
-	Worker worker
-
-	List<WorkerThread> workers = []
-
-	protected final Object managerMutex = new Object()
-
-	@PostConstruct
-	protected void setup() {
-
-		String hostname = InetAddress.localHost.canonicalHostName
-		String ip = InetAddress.localHost.hostAddress
-		String name = configService.name
-
-		worker = [
-				name: name,
-				os: System.properties['os.name'],
-				hostname: hostname,
-				host: "${hostname}:${configService.serverPort}",
-				ip: ip,
-				id: configService.config.workerId,
-				jobs: [],
-				osDetails: configService.osDetails
-		]
-
-		register()
-
-		int executorCount = configService.executorCount
-
-		for (i in 1..executorCount) {
-			WorkerThread worker = workerFactory.object
-			worker.name = "Worker ${i}"
-			workers += worker
-		}
+		return registration;
 	}
-
-	private Invocation.Builder createRequest(String path, MediaType type) {
-		Invocation.Builder request = client.target("http://${configService.managerHost}/api/${path}").request(type)
-		request.header('workerId', worker.id)
-
-		return request
-	}
-
-	protected void updateJobsInternal(Worker updatedWorker) {
-		List<Job> jobsToRemove = []
-		for (Job currentJob : worker.jobs) {
-			boolean exists = false
-			for (Job job : updatedWorker.jobs) {
-				if (job.equals(currentJob)) {
-					exists = true
-					break
-				}
-			}
-
-			if (!exists) {
-				jobsToRemove += currentJob
-			}
-		}
-
-		jobsToRemove.each { job ->
-			log.info("Removing Job ${job}")
-			worker.jobs.remove(job)
-		}
-	}
-
-	@Scheduled(fixedRate = 10000L)
-	void heartbeat() {
-		synchronized (managerMutex) {
-			Invocation.Builder req = createRequest('worker', MediaType.APPLICATION_JSON_TYPE)
-			Worker updatedWorker = req.put(Entity.entity(worker, MediaType.APPLICATION_JSON_TYPE), Worker.class)
-
-			updateJobsInternal(updatedWorker)
-		}
-	}
-
-	void register() {
-		synchronized (managerMutex) {
-			Invocation.Builder req = createRequest('worker', MediaType.APPLICATION_JSON_TYPE)
-			worker = req.post(Entity.entity(worker, MediaType.APPLICATION_JSON_TYPE), Worker.class)
-		}
-	}
-
-
-	Job getJob() {
-
-		Invocation.Builder req = createRequest('worker/job', MediaType.APPLICATION_JSON_TYPE)
-		try {
-			Job job = null
-
-			synchronized (managerMutex) {
-				job = req.get(Job.class)
-			}
-			if (job) {
-				worker.jobs += job
-				heartbeat()
-			}
-			return job
-		} catch (ProcessingException pe) {
-			if (pe.cause instanceof ConnectException)
-				log.warn('Unable to connect to the plumbing manager')
-			else
-				throw pe
-		}
-
-
-	}
-
-
 
 
 }

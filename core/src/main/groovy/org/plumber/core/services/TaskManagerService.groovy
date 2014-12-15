@@ -709,7 +709,6 @@ class TaskManagerService {
 				log.info("Found task type: {}", taskType.name())
 				taskTypes[taskType.name()] = taskType
 			}
-
 		}
 	}
 
