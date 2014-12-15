@@ -49,15 +49,15 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>org.reflections</groupId>
-      <artifactId>reflections</artifactId>
-      <version>0.9.9-RC1</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
       <groupId>org.plumber</groupId>
       <artifactId>client</artifactId>
       <version>1.0.2</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.reflections</groupId>
+      <artifactId>reflections</artifactId>
+      <version>0.9.9-RC1</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
