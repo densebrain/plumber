@@ -222,27 +222,28 @@ configure(installableProjects) {
 		}
 	}
 
-	task deploy(type: Exec) {
-
-		workingDir "${rootProject.path}"
-		commandLine 'deploy-repo.sh'
 
 
-	}
+}
+
+task deployToGitHub(type: Exec) {
+
+	workingDir "${rootProject.path}"
+	commandLine 'deploy-repo.sh'
+
 
 }
 
 task installProjects {
 	mustRunAfter(project(':manager').classes)
 
-	println(installableProjects)
 	dependsOn installableProjects.install
 }
 
-task deployProjects {
-	println(installableProjects)
-	dependsOn installableProjects.install
+task deployProjects(type: Exec) {
+	dependsOn installProjects
+	workingDir "${project.projectDir}"
 
-
-	dependsOn installableProjects.deploy
+	commandLine "${project.projectDir.absolutePath}/deploy-repo.sh"
+	println("Executing ${commandLine}")
 }

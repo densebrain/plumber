@@ -682,9 +682,7 @@ import org.springframework.context.annotation.ComponentScan
 
 
 @Slf4j
-//@SpringBootApplication()
 @ComponentScan(basePackages = 'org.plumber')
-//@EnableAutoConfiguration(exclude = PlumberApplicationContext.getExcludedClasses())
 class PlumberApplication {
 
 
@@ -699,6 +697,9 @@ class PlumberApplication {
 	}
 
 	static void start(String...args) {
+		if (app != null)
+			stop()
+
 		app = new SpringApplication(PlumberApplication.class, PropertyPlaceholderAutoConfiguration.class)
 		app.setApplicationContextClass(PlumberApplicationContext.class)
 		app.setWebEnvironment(false)
