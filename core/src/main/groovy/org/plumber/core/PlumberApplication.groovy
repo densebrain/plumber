@@ -698,7 +698,8 @@ class PlumberApplication {
 
 	static void start(String...args) {
 		if (app != null)
-			stop()
+			return
+			//stop()
 
 		app = new SpringApplication(PlumberApplication.class, PropertyPlaceholderAutoConfiguration.class)
 		app.setApplicationContextClass(PlumberApplicationContext.class)
