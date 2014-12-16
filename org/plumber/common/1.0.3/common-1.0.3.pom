@@ -7,6 +7,12 @@
   <version>1.0.3</version>
   <dependencies>
     <dependency>
+      <groupId>org.plumber</groupId>
+      <artifactId>client</artifactId>
+      <version>1.0.3</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
       <groupId>org.springframework</groupId>
       <artifactId>spring-context</artifactId>
       <version>4.1.2.RELEASE</version>
@@ -46,12 +52,6 @@
       <groupId>org.springframework</groupId>
       <artifactId>spring-core</artifactId>
       <version>4.1.2.RELEASE</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.plumber</groupId>
-      <artifactId>client</artifactId>
-      <version>1.0.3</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
