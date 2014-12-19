@@ -683,11 +683,13 @@ class BrewPackageManager extends BasePackageManager {
 	@Autowired
 	private ShellCommand shell;
 
-
+	private static final String PATH = '/usr/local/bin'
+	private static final String EXEC = PATH + '/brew'
+	private static final String CMD = "PATH=\$PATH:${PATH} ${EXEC}"
 
 	@Override
 	List<OsPackage> list() {
-		ShellCommand.Result result = shell.execute("brew leaves")
+		ShellCommand.Result result = shell.execute("${CMD} leaves")
 		if (!result.success())
 			throw new RuntimeException(result.err);
 
@@ -701,7 +703,7 @@ class BrewPackageManager extends BasePackageManager {
 
 	@Override
 	OsPackage install(String name) {
-		ShellCommand.Result result = shell.execute("brew install ${name}")
+		ShellCommand.Result result = shell.execute("${CMD} install ${name}")
 		if (!result.success())
 			throw new RuntimeException(result.err)
 
@@ -720,7 +722,7 @@ class BrewPackageManager extends BasePackageManager {
 
 	@Override
 	Boolean available() {
-		ShellCommand.Result result = shell.execute("brew --version")
+		ShellCommand.Result result = shell.execute("${CMD} --version")
 		return result.success()
 	}
 }
