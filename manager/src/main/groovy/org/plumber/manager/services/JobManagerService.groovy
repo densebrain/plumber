@@ -756,8 +756,14 @@ class JobManagerService {
 
 	Job get(String id) {
 		File jobFile = getJobFile(id)
-		Job job = new Gson().fromJson(jobFile.text, Job.class)
-		return job
+		try {
+			Job job = new Gson().fromJson(jobFile.text, Job.class)
+			return job
+		} catch (FileNotFoundException fe) {
+			log.warn("Could not find file ${jobFile.absolutePath}")
+			return null
+		}
+
 	}
 
 	List<Job> getAllPending() {
