@@ -727,7 +727,7 @@ class PackageManagerService {
             return
 
         log.info("Installing package: {}", p)
-        manager.install(p.name)
+        manager.install(p)
         updateInstalledPackages()
     }
 

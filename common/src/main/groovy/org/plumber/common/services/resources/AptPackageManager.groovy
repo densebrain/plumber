@@ -667,6 +667,7 @@
 package org.plumber.common.services.resources
 
 import groovy.util.logging.Slf4j
+import org.plumber.client.domain.OSType
 import org.plumber.client.domain.OsPackage
 import org.plumber.common.services.ShellCommand
 import org.springframework.beans.factory.annotation.Autowired
@@ -683,7 +684,9 @@ class AptPackageManager extends BasePackageManager {
 	@Autowired
 	private ShellCommand shell;
 
-
+	OSType getOSType() {
+		return OSType.UNIX
+	}
 
 	@Override
 	List<OsPackage> list() {
@@ -700,12 +703,13 @@ class AptPackageManager extends BasePackageManager {
 	}
 
 	@Override
-	OsPackage install(String name) {
-		ShellCommand.Result result = shell.execute("sudo -n apt-get install -y ${name}")
+	OsPackage install(OsPackage p) {
+
+		ShellCommand.Result result = shell.execute("sudo -n apt-get install -y ${p.name} ${getArgs(p)}")
 		if (!result.success())
 			throw new RuntimeException(result.err)
 
-		return new OsPackage(name: name, description: name, version: 'CURRENT')
+		return p
 	}
 
 	@Override

@@ -667,6 +667,7 @@
 package org.plumber.common.services.resources
 
 import groovy.util.logging.Slf4j
+import org.plumber.client.domain.OSType
 import org.plumber.client.domain.OsPackage
 import org.plumber.common.services.ShellCommand
 import org.springframework.beans.factory.annotation.Autowired
@@ -688,6 +689,11 @@ class BrewPackageManager extends BasePackageManager {
 	private static final String CMD = "PATH=\$PATH:${PATH} ${EXEC}"
 
 	@Override
+	OSType getOSType() {
+		return OSType.MAC
+	}
+
+	@Override
 	List<OsPackage> list() {
 		ShellCommand.Result result = shell.execute("${CMD} leaves")
 		if (!result.success())
@@ -702,12 +708,12 @@ class BrewPackageManager extends BasePackageManager {
 	}
 
 	@Override
-	OsPackage install(String name) {
-		ShellCommand.Result result = shell.execute("${CMD} install ${name}")
+	OsPackage install(OsPackage p) {
+		ShellCommand.Result result = shell.execute("${CMD} install ${p.name} ${getArgs(p)}")
 		if (!result.success())
 			throw new RuntimeException(result.err)
 
-		return new OsPackage(name: name, description: name, version: 'CURRENT')
+		return p
 	}
 
 	@Override

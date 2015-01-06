@@ -676,6 +676,7 @@ import groovy.transform.ToString
 class OsPackage {
 
     String name, description, version
+	List<OsPackageOption> options
 
     boolean equals(o) {
         if (this.is(o)) return true
@@ -691,4 +692,9 @@ class OsPackage {
     int hashCode() {
         return (name != null ? name.hashCode() : 0)
     }
+
+	public static class OsPackageOption {
+		OSType os
+		String options
+	}
 }

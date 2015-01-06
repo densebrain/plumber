@@ -666,10 +666,26 @@
 
 package org.plumber.common.services.resources
 
+import org.plumber.client.domain.OSType
+import org.plumber.client.domain.OsPackage
+
 /**
  * Created by jglanz on 11/17/14.
  */
 abstract class BasePackageManager implements OsPackageManager {
 
+	abstract OSType getOSType();
 
+	String getArgs(OsPackage p) {
+		String args = ''
+		if (p.options) {
+			for (OsPackage.OsPackageOption option : p.options) {
+				if (option.os != getOSType() && option.os != OSType.ALL)
+					continue
+
+				args += " ${option.options}"
+			}
+		}
+		return args
+	}
 }

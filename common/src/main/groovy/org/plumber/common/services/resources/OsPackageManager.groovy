@@ -675,7 +675,7 @@ interface OsPackageManager {
 
     List<OsPackage> list()
 
-    OsPackage install(String name)
+    OsPackage install(OsPackage p)
 
     void remove(OsPackage p)
 
