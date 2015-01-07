@@ -701,22 +701,18 @@ class ReflectionService {
 
 	@PostConstruct
 	private void setup() {
-		Thread.currentThread().setContextClassLoader(plumberClassLoader)
+		ClassLoader original = Thread.currentThread().contextClassLoader
+		//Thread.currentThread().setContextClassLoader(plumberClassLoader)
 
 		HashSet<URL> urls = new HashSet<>(ClasspathHelper.forJavaClassPath())
 		urls.addAll(plumberClassLoader.URLs)
+		urls.addAll(ClasspathHelper.forClassLoader(plumberClassLoader))
+		urls.addAll(ClasspathHelper.forClassLoader(original))
+		urls.addAll(ClasspathHelper.forClassLoader(getClass().classLoader))
+		urls.addAll(ClasspathHelper.forClassLoader(System.classLoader))
 
-		Vfs.addDefaultURLTypes(new Vfs.UrlType() {
-			@Override
-			boolean matches(URL url) throws Exception {
-				return url.toString().endsWith('.war')
-			}
+		log.trace("All urls for reflection: ${urls}")
 
-			@Override
-			Vfs.Dir createDir(URL url) throws Exception {
-				return new WarDir(new JarFile(Vfs.getFile(url)))
-			}
-		})
 		reflections = new Reflections(urls)
 
 

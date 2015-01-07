@@ -734,6 +734,7 @@ class PackageManagerService {
     List<OsPackageManager> availablePackageManagers() {
 
         Set<Class<? extends OsPackageManager>> clazzes = reflectionService.getSubTypesOf(OsPackageManager.class)
+		log.info "Manager Classes ${clazzes}"
 
         def managers = [];
 

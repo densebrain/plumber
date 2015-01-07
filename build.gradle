@@ -16,6 +16,7 @@ buildscript {
 		springBootVersion = '1.2.0.RC2'
 		tomcatVersion = '8.0.15'
 
+		version = '1.0.5'
 	}
 
 
@@ -96,6 +97,7 @@ subprojects {
 
 
 	}
+
 
 	generateRebel.mustRunAfter(classes)
 
@@ -191,10 +193,31 @@ project(':worker') {
 
 }
 
+
 project(':manager') {
 	dependencies {
         compile project(':worker')
     }
+
+
+	task release(type: Exec) {
+		dependsOn build
+
+		workingDir "${rootProject.projectDir}"
+
+		commandLine "${rootProject.projectDir.absolutePath}/deploy-release.sh", "${rootProject.version}"
+
+		doFirst {
+			println("Executing ${commandLine}")
+		}
+
+		doLast {
+
+		}
+	}
+
+
+
 }
 
 
@@ -235,15 +258,25 @@ task deployToGitHub(type: Exec) {
 }
 
 task installProjects {
-	mustRunAfter(project(':manager').classes)
+	mustRunAfter(project(':manager').build)
 
 	dependsOn installableProjects.install
 }
 
+
+
 task deployProjects(type: Exec) {
 	dependsOn installProjects
+
 	workingDir "${project.projectDir}"
 
 	commandLine "${project.projectDir.absolutePath}/deploy-repo.sh"
-	println("Executing ${commandLine}")
+
+	doFirst {
+		println("Executing ${commandLine}")
+	}
+
+	doLast {
+
+	}
 }
