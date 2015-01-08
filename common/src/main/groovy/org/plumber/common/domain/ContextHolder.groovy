@@ -666,6 +666,7 @@
 
 package org.plumber.common.domain
 
+import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 
 /**
@@ -673,7 +674,8 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
  */
 class ContextHolder {
 
-	List<AnnotationConfigApplicationContext> contexts
+	ApplicationContext context
+	AnnotationConfigApplicationContext subContext
 
 
 }

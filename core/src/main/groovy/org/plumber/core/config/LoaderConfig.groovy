@@ -692,7 +692,9 @@ import org.springframework.core.io.DefaultResourceLoader
 @Configuration
 @Slf4j
 
-class LoaderConfig {
+class LoaderConfig implements ApplicationListener<ContextRefreshedEvent>{
+
+	static gLoadedSubContext = false
 
 	@Autowired
 	private FileService fileService
@@ -700,68 +702,67 @@ class LoaderConfig {
 	@Autowired
 	private ApplicationContext applicationContext;
 
+
+
 	@Value('${extraPath:}')
 	String extraPath
 
-	private ContextHolder contextHolder
+	private static ContextHolder contextHolder
+
+	private static URLClassLoader loader
 
 	@Bean(name="PlumbingContext")
 	@Order(Ordered.LOWEST_PRECEDENCE)
 	public ContextHolder loadContexts(@Qualifier("PlumbingLoader") final URLClassLoader loader) {
 		log.info("Loading contexts")
-		final ArrayList<AnnotationConfigApplicationContext> contexts = new ArrayList<>()
-		final ApplicationContext applicationContext = this.applicationContext
-		applicationContext.addApplicationListener(new ApplicationListener<ContextRefreshedEvent>() {
-			@Override
-			void onApplicationEvent(ContextRefreshedEvent event) {
-				if (!(event.source.equals(applicationContext)))
-					return
 
-				Thread.currentThread().setContextClassLoader(loader)
-				ApplicationContext context = (ApplicationContext) event.source
-				for (URL url : loader.findResources('plumber.properties')) {
-					Properties props = new Properties()
-					props.load(url.openStream())
+		if (contextHolder)
+			return contextHolder
 
+		contextHolder = new ContextHolder(context: applicationContext)
+		applicationContext.addApplicationListener(this)
 
-					String scanPackage = props.getProperty("scan", null)
-					log.info("Going to scan package ${scanPackage}")
-					if (scanPackage) {
-						AnnotationConfigApplicationContext subContext = new AnnotationConfigApplicationContext()
-						subContext.setParent(context)
-						subContext.scan(scanPackage)
-						subContext.refresh()
-						subContext.start()
-
-						contexts.add(subContext)
-					}
-				}
-
-
-				TaskManagerService taskManagerService = context.getBean(TaskManagerService.class)
-				PackageManagerService packageManagerService = context.getBean(PackageManagerService.class)
-				taskManagerService.refresh()
-				packageManagerService.refresh()
-
-			}
-		})
-
-		contextHolder = new ContextHolder(contexts:contexts)
 		return contextHolder
 	}
 
 	@Bean(name="PlumbingLoader")
 	public URLClassLoader loader() {
+		if (loader)
+			return loader
+
 		log.debug("Application context is of type ${applicationContext.class.name}")
 
 		List<String> paths = new ArrayList<>()
 		paths.add('extras')
+
+		def addDir
+		addDir = { dir ->
+			if (!dir.isDirectory())
+				return
+
+			for (File file : dir.listFiles()) {
+				if (file.isDirectory())
+					addDir(file)
+				else if (!paths.contains(file.getAbsolutePath())) {
+					log.debug "Adding file to extra loader ${file.getAbsolutePath()}"
+					paths.add(file.getAbsolutePath())
+				}
+			}
+		}
+
 		for (String path : extraPath.split(':')) {
 			if (path && !paths.contains(path))
 				paths.add(path)
 		}
 
+		List<String> basePaths = new ArrayList<>(paths)
+		for (String path: basePaths) {
+			File dir = new File(path)
+			addDir(dir)
+		}
+
 		List<URL> urls = new ArrayList<>()
+
 		for (String path : paths) {
 			File file = new File(path)
 			if (file.exists())
@@ -769,9 +770,9 @@ class LoaderConfig {
 		}
 
 
-		URLClassLoader loader = new URLClassLoader(Functions.toArray(urls, URL.class), getClass().classLoader)
-		Thread.currentThread().setContextClassLoader(loader)
-		applicationContext.setResourceLoader(new DefaultResourceLoader(loader))
+		loader = new URLClassLoader(Functions.toArray(urls, URL.class), getClass().classLoader)
+		//Thread.currentThread().setContextClassLoader(loader)
+		//applicationContext.setResourceLoader(new DefaultResourceLoader(loader))
 
 
 
@@ -780,4 +781,66 @@ class LoaderConfig {
 
 	}
 
+	@Override
+	void onApplicationEvent(ContextRefreshedEvent event) {
+		if (!(event.source.equals(applicationContext)) || contextHolder.subContext)
+			return
+
+		synchronized (LoaderConfig.class) {
+			if (gLoadedSubContext)
+				return
+
+			gLoadedSubContext = true
+		}
+
+
+		log.info("Extra Loading Path: ${extraPath}")
+
+		Thread.currentThread().setContextClassLoader(LoaderConfig.loader)
+		//ApplicationContext context = (ApplicationContext) event.source
+		List<String> scans = new ArrayList<>()
+
+
+		for (URL url : LoaderConfig.loader.findResources('plumber.properties')) {
+			Properties props = new Properties()
+			props.load(url.openStream())
+
+
+			String scanPackage = props.getProperty("scan", null)
+			if (!scans.contains(scanPackage)) {
+				log.info("Going to scan package ${scanPackage}")
+				scans.add(scanPackage)
+			}
+
+		}
+
+
+		if (scans.size() > 0) {
+			AnnotationConfigApplicationContext subContext = new AnnotationConfigApplicationContext()
+			LoaderConfig.contextHolder.subContext = subContext
+			subContext.scan(scans as String[])
+			subContext.refresh()
+			subContext.start()
+
+			LoaderConfig.log.trace "Bean list"
+			subContext.beanDefinitionNames.each { name ->
+				LoaderConfig.log.trace "Bean ${name}"
+			}
+		}
+
+
+		TaskManagerService taskManagerService =
+			LoaderConfig.contextHolder.context.getBean(
+				TaskManagerService.class)
+		PackageManagerService packageManagerService =
+			LoaderConfig.contextHolder.context.getBean(
+				PackageManagerService.class)
+
+		taskManagerService.refresh()
+		packageManagerService.refresh()
+
+
+	}
+
 }
+

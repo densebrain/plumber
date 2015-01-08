@@ -669,19 +669,11 @@ package org.plumber.core
  * Created by jglanz on 11/14/14.
  */
 
-//@SpringBootApplication
-//@SpringApplicationConfiguration
-//@ComponentScan(basePackages = ["org.plumber"])
-//@EnableAutoConfiguration(exclude = [
-//    GroovyTemplateAutoConfiguration.class,
-//    HibernateJpaAutoConfiguration.class
-//])
+
 class Application {
 
     static void main(String[] args) throws Exception {
-        PlumberApplication.start()
-
-        //SpringApplication.run([Application.class, LoaderConfig.class, JerseyConfiguration.class, EmbeddedServletContainerFactory.class] as Object[], args);
+        PlumberApplication.start(args)
     }
 
 }

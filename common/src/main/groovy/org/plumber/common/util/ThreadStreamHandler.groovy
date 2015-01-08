@@ -736,7 +736,7 @@ class ThreadedStreamHandler extends Thread
             String line = null;
             while ((line = bufferedReader.readLine()) != null)
             {
-                log.debug(line)
+                log.trace(line)
                 outputBuffer.append(line + "\n");
             }
         }

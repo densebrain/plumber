@@ -704,13 +704,15 @@ class BeanService {
 			o = context.getBean(clazz);
 		} catch (Exception e) {
 			try {
-				for (AnnotationConfigApplicationContext subContext : contextHolder.contexts) {
-					try {
-						o = subContext.getBean(clazz)
-						if (o != null)
-							return o
-					} catch (Exception e2) {}
+				if (contextHolder.subContext == null)
+					throw new Exception("Sub context is not ready yet")
+
+				o = contextHolder.subContext.getBean(clazz);
+				if (o) {
+					log.debug "Found in sub context: ${clazz.name}"
+					return o
 				}
+
 			} catch (Exception e4) {
 				try {
 					o = context.autowireCapableBeanFactory.autowire(clazz, AutowireCapableBeanFactory.AUTOWIRE_BY_TYPE, true)
@@ -718,7 +720,8 @@ class BeanService {
 					try {
 						o = clazz.newInstance()
 					} catch (Exception e3) {
-						log.debug("Unavailable in spring context or classloader: ${e3.message}");
+						log.debug("Unavailable in classloader: ${e3.message}", e3);
+						log.debug("Unavailable in spring context: ${e4.message}", e4);
 					}
 				}
 			}

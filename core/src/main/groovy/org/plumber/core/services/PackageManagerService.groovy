@@ -716,7 +716,7 @@ class PackageManagerService {
         installedPackages = []
 
         manager.list().each { p ->
-            log.info('Installed package {}-version-{}', p.name, p.version)
+            log.trace('Installed package {}-version-{}', p.name, p.version)
             installedPackages += p
         }
     }
