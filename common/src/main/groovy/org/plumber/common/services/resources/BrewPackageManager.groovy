@@ -688,10 +688,11 @@ class BrewPackageManager extends BasePackageManager {
 	private static final String EXEC = PATH + '/brew'
 	private static final String CMD = "PATH=\$PATH:${PATH} ${EXEC}"
 
-	@Override
-	OSType getOSType() {
-		return OSType.MAC
+	BrewPackageManager() {
+		super(OSType.MAC)
 	}
+
+
 
 	@Override
 	List<OsPackage> list() {

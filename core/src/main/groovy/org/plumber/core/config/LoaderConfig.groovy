@@ -817,6 +817,8 @@ class LoaderConfig implements ApplicationListener<ContextRefreshedEvent>{
 
 		if (scans.size() > 0) {
 			AnnotationConfigApplicationContext subContext = new AnnotationConfigApplicationContext()
+			subContext.setParent(applicationContext)
+
 			LoaderConfig.contextHolder.subContext = subContext
 			subContext.scan(scans as String[])
 			subContext.refresh()

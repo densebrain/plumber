@@ -693,6 +693,9 @@ class PlumberApplication {
 	static ApplicationContext parentContext
 
 	static void setParentContext(ApplicationContext _parentContext) {
+		if (_parentContext.parent && _parentContext.parent == context)
+			return
+
 		parentContext = _parentContext
 	}
 
@@ -706,8 +709,9 @@ class PlumberApplication {
 		app.setWebEnvironment(false)
 		context = app.run(args)
 
-		if (parentContext)
+		if (parentContext && parentContext != context) {
 			context.setParent(parentContext)
+		}
 
 	}
 

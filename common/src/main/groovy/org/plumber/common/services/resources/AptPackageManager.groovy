@@ -684,8 +684,8 @@ class AptPackageManager extends BasePackageManager {
 	@Autowired
 	private ShellCommand shell;
 
-	OSType getOSType() {
-		return OSType.UNIX
+	AptPackageManager() {
+		super(OSType.UNIX)
 	}
 
 	@Override

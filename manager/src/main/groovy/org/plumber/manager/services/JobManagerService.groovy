@@ -736,7 +736,7 @@ class JobManagerService {
 	void persist() {
 		synchronized (pendingJobs) {
 			String jobsJson = new Gson().toJson(pendingJobs)
-			log.debug("Writing ${jobsJson}")
+			log.trace("Writing ${jobsJson}")
 			pendingJobsFile.text = jobsJson
 
 		}

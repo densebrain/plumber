@@ -674,7 +674,15 @@ import org.plumber.client.domain.OsPackage
  */
 abstract class BasePackageManager implements OsPackageManager {
 
-	abstract OSType getOSType();
+	private OSType osType
+
+	BasePackageManager(OSType osType) {
+		this.osType = osType
+	}
+
+	OSType getOSType() {
+		return osType
+	}
 
 	String getArgs(OsPackage p) {
 		String args = ''

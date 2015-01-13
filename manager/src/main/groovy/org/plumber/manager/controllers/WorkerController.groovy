@@ -708,7 +708,7 @@ class WorkerController {
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	Worker post(Worker worker) {
-		log.debug("Registering {}", worker)
+		log.trace("Registering {}", worker)
 		return workerManagerService.set(worker)
 	}
 

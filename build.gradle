@@ -16,7 +16,7 @@ buildscript {
 		springBootVersion = '1.2.0.RC2'
 		tomcatVersion = '8.0.15'
 
-		version = '1.0.6'
+		plumberVersion = '1.0.8'
 	}
 
 
@@ -57,7 +57,7 @@ allprojects {
 	apply plugin: 'rebel'
 
 	group = 'org.plumber'
-	version = '1.0.6'
+	version = plumberVersion
 
 	sourceCompatibility = 1.8
 	targetCompatibility = 1.8
