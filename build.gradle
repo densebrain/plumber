@@ -16,7 +16,7 @@ buildscript {
 		springBootVersion = '1.2.0.RC2'
 		tomcatVersion = '8.0.15'
 
-		plumberVersion = '1.0.8'
+		plumberVersion = '1.0.9'
 	}
 
 
